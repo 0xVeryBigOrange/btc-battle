@@ -3,67 +3,117 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>BTC 多空战场 · 蓝军 vs 红军</title>
-<meta name="description" content="实时比特币价格与多空挂单/吃单对决：蓝军（多）vs 红军（空）动画战场" />
+<title>Crypto War · 多空战场 | BTC / ETH 实时多空对决</title>
+<meta name="description" content="Crypto War · 多空战场：BTC / ETH 实时价格、挂单与吃单对决，蓝军（多）vs 红军（空）动画战场。by 大橙子 @0xVeryBigOrange" />
+<meta name="author" content="大橙子 (Big Orange) @0xVeryBigOrange" />
 <meta name="theme-color" content="#070a14" />
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="Crypto War · 多空战场" />
+<meta property="og:title" content="Crypto War · 多空战场 ⚔️ 蓝军(多) vs 红军(空)" />
+<meta property="og:description" content="BTC / ETH 实时价格 + 挂单/吃单多空对决动画战场。大单开炮，巨鲸空袭。by 大橙子 @0xVeryBigOrange" />
+<meta property="og:url" content="https://0xverybigorange.github.io/btc-battle/" />
+<meta property="og:image" content="https://0xverybigorange.github.io/btc-battle/og.png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:locale" content="zh_CN" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:site" content="@0xVeryBigOrange" />
+<meta name="twitter:creator" content="@0xVeryBigOrange" />
+<meta name="twitter:title" content="Crypto War · 多空战场 ⚔️" />
+<meta name="twitter:description" content="BTC / ETH 实时多空对决：蓝军(多) vs 红军(空)，大单开炮，巨鲸空袭。" />
+<meta name="twitter:image" content="https://0xverybigorange.github.io/btc-battle/og.png" />
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚔️</text></svg>" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700;800&family=Noto+Sans+SC:wght@400;600;800;900&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Ma+Shan+Zheng&family=JetBrains+Mono:wght@500;700;800&family=Noto+Sans+SC:wght@400;600;800;900&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-<div class="bg-grid"></div>
-<header class="topbar">
-  <div class="brand">
-    <span class="logo">⚔️</span>
-    <div>
-      <h1>BTC 多空战场</h1>
-      <p class="sub">蓝军 <b class="c-blue">多</b> vs 红军 <b class="c-red">空</b> · 实时挂单 / 吃单对决</p>
-    </div>
+<!-- 开场 -->
+<div class="intro" id="intro">
+  <div class="intro-glow b"></div><div class="intro-glow r"></div>
+  <div class="intro-inner">
+    <div class="swords"><span class="sw">⚔️</span><span class="clash"></span></div>
+    <div class="intro-title">CRYPTO WAR</div>
+    <div class="intro-sub">多 空 战 场</div>
+    <div class="intro-bar"><i id="introBar"></i></div>
+    <div class="intro-msg" id="introMsg">集结部队中…</div>
   </div>
+</div>
+
+<div class="bg-grid"></div>
+<div class="bg-orb b"></div><div class="bg-orb r"></div>
+
+<header class="topbar">
+  <a class="brand" href="./" aria-label="Crypto War 首页">
+    <span class="logo"><svg viewBox="0 0 48 48" aria-hidden="true"><defs><linearGradient id="lg" x1="0" x2="1"><stop offset="0" stop-color="#60a5fa"/><stop offset="1" stop-color="#f87171"/></linearGradient></defs><path d="M10 38 L34 8 L38 10 L14 40 Z" fill="#60a5fa"/><path d="M38 38 L14 8 L10 10 L34 40 Z" fill="#f87171"/><circle cx="24" cy="24" r="5" fill="#fde68a"/></svg></span>
+    <div class="wordmark">
+      <div class="wm-en">CRYPTO WAR</div>
+      <div class="wm-cn">多空战场 <span class="wm-tag">LIVE</span></div>
+    </div>
+  </a>
+
+  <nav class="coin-tabs" id="coinTabs" role="tablist">
+    <span class="tab-ind" id="tabInd"></span>
+    <button role="tab" data-coin="btc"><span class="ct-sym">₿ BTC</span><span class="ct-px" id="mini-btc">--</span><span class="ct-ch" id="minich-btc"></span></button>
+    <button role="tab" data-coin="eth"><span class="ct-sym">Ξ ETH</span><span class="ct-px" id="mini-eth">--</span><span class="ct-ch" id="minich-eth"></span></button>
+  </nav>
+
   <div class="controls">
     <div class="status" id="status"><span class="dot"></span><span id="statusText">连接中…</span></div>
     <select id="sourceSel" aria-label="数据源">
-      <option value="auto">自动（Binance→OKX→Coinbase）</option>
+      <option value="auto">自动</option>
       <option value="binance">Binance</option>
       <option value="okx">OKX</option>
       <option value="coinbase">Coinbase</option>
     </select>
-    <button id="soundBtn" class="icon-btn" title="音效">🔇</button>
+    <button id="soundBtn" class="icon-btn" title="音效" aria-label="音效">🔇</button>
+    <a class="icon-btn x-btn" href="https://x.com/0xVeryBigOrange" target="_blank" rel="noopener" title="关注 @0xVeryBigOrange" aria-label="X / Twitter">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+    </a>
   </div>
 </header>
 
 <main class="layout">
   <section class="card price-card">
-    <div class="price-head">
-      <span class="pair" id="pair">BTC/USDT</span>
-      <span class="tps" id="tps">0 笔/秒</span>
-    </div>
-    <div class="price" id="price">--</div>
-    <div class="price-meta">
-      <span id="chg" class="chg">--</span>
-      <span>高 <b id="hi">--</b></span>
-      <span>低 <b id="lo">--</b></span>
-      <span>24h 量 <b id="vol">--</b></span>
+    <div class="price-left">
+      <div class="price-head">
+        <span class="pair" id="pair">BTC/USDT</span>
+        <span class="tps" id="tps">0 笔/秒</span>
+      </div>
+      <div class="price" id="price">--</div>
+      <div class="price-meta">
+        <span id="chg" class="chg">--</span>
+        <span>高 <b id="hi">--</b></span>
+        <span>低 <b id="lo">--</b></span>
+        <span>24h 量 <b id="vol">--</b></span>
+      </div>
     </div>
     <div class="power">
-      <div class="power-labels"><span class="c-blue">蓝军战力 <b id="bluePow">50</b>%</span><span id="battleState" class="state">⚖️ 两军对峙</span><span class="c-red"><b id="redPow">50</b>% 红军战力</span></div>
-      <div class="power-bar"><div class="pb-blue" id="pbBlue"></div><div class="pb-red" id="pbRed"></div><div class="pb-mid"></div></div>
+      <div class="power-labels">
+        <span class="c-blue pl"><i class="pl-flag blue">多</i>蓝军战力 <b id="bluePow">50</b>%</span>
+        <span id="battleState" class="state">⚖️ 两军对峙</span>
+        <span class="c-red pl pr"><b id="redPow">50</b>% 红军战力<i class="pl-flag red">空</i></span>
+      </div>
+      <div class="power-bar" id="powerBar">
+        <div class="pb-blue" id="pbBlue"></div><div class="pb-red" id="pbRed"></div>
+        <div class="pb-clash" id="pbClash"></div>
+      </div>
+      <div class="power-foot"><span>战力 = 10 秒吃单 + 1 分钟吃单 + ±0.5% 挂单厚度</span><span id="streak"></span></div>
     </div>
   </section>
 
   <section class="card battle-card">
     <canvas id="battle"></canvas>
     <div class="banner" id="banner"></div>
-    <div class="hud-l"><span class="flag blue">多</span> 蓝军 · 买方</div>
-    <div class="hud-r">卖方 · 红军 <span class="flag red">空</span></div>
-    <div class="legend">小兵 = 成交 · 炮弹 ≥ $5万 · 重炮 ≥ $25万 · 🐋 空袭 ≥ $100万</div>
+    <div class="hud-l"><span class="flag blue">多</span><span>蓝军 · 买方</span></div>
+    <div class="hud-r"><span>卖方 · 红军</span><span class="flag red">空</span></div>
+    <div class="legend" id="legend"></div>
   </section>
 
   <section class="card taker-card">
-    <h2>⚡ 吃单 <small>主动成交 · 谁在冲锋</small></h2>
-    <div class="ratio-block" data-win="10s">
+    <h2><span class="h-ico">⚡</span> 吃单 <small>主动成交 · 谁在冲锋</small></h2>
+    <div class="ratio-block">
       <div class="rb-head"><span>10 秒</span><span class="rb-pct" id="tk10pct">--</span></div>
       <div class="ratio-bar"><i class="rb-b" id="tk10b"></i><i class="rb-r" id="tk10r"></i></div>
       <div class="rb-foot"><span class="c-blue" id="tk10buy">--</span><span class="c-red" id="tk10sell">--</span></div>
@@ -83,7 +133,7 @@
   </section>
 
   <section class="card book-card">
-    <h2>🛡️ 挂单 <small>盘口深度 · 谁的城墙厚</small></h2>
+    <h2><span class="h-ico">🛡️</span> 挂单 <small>盘口深度 · 谁的城墙厚</small></h2>
     <div class="ratio-block">
       <div class="rb-head"><span>±0.5%</span><span class="rb-pct" id="bk05pct">--</span></div>
       <div class="ratio-bar"><i class="rb-b" id="bk05b"></i><i class="rb-r" id="bk05r"></i></div>
@@ -99,17 +149,31 @@
   </section>
 
   <section class="card trades-card">
-    <h2>💥 大单战报
-      <span class="chips" id="chips">
-        <button data-v="20000">2万</button><button data-v="50000" class="on">5万</button><button data-v="100000">10万</button><button data-v="500000">50万</button>
-      </span>
+    <h2><span class="h-ico">💥</span> 大单战报
+      <span class="chips" id="chips"></span>
     </h2>
     <div class="trades-head"><span>时间</span><span>方向</span><span>价格</span><span>数量</span><span>金额</span></div>
     <ul class="trades" id="trades"></ul>
   </section>
 </main>
+
 <footer class="foot">
-  数据来自交易所公共行情（无需 API Key），仅供娱乐参考，不构成投资建议 · 蓝 = 多 / 买方，红 = 空 / 卖方
+  <div class="author card">
+    <div class="avatar">🍊</div>
+    <div class="au-txt">
+      <div class="au-name">大橙子 <span>Big Orange</span></div>
+      <div class="au-sub">Crypto War · 多空战场 作者</div>
+    </div>
+    <div class="au-links">
+      <a class="au-btn x" href="https://x.com/0xVeryBigOrange" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+        @0xVeryBigOrange</a>
+      <a class="au-btn gh" href="https://github.com/0xVeryBigOrange/btc-battle" target="_blank" rel="noopener">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        GitHub 源码</a>
+    </div>
+  </div>
+  <p class="disclaimer">数据来自 Binance / OKX / Coinbase 公共行情（无需 API Key），仅供娱乐参考，不构成投资建议 · 蓝 = 多 / 买方，红 = 空 / 卖方</p>
 </footer>
 <script type="module" src="js/app.js"></script>
 </body>

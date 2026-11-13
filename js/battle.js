@@ -21,6 +21,16 @@ function makeGlow(r, g, b, size = 64) {
   gr.addColorStop(1, `rgba(${r},${g},${b},0)`);
   x.fillStyle = gr; x.fillRect(0, 0, size, size); return c;
 }
+function makeCloud() {
+  const c = document.createElement('canvas'); c.width = 256; c.height = 64; const x = c.getContext('2d');
+  for (let i = 0; i < 14; i++) {
+    const cx = rand(40, 216), cy = rand(26, 40), r = rand(14, 30);
+    const g = x.createRadialGradient(cx, cy, 0, cx, cy, r);
+    g.addColorStop(0, 'rgba(120,110,170,0.35)'); g.addColorStop(1, 'rgba(120,110,170,0)');
+    x.fillStyle = g; x.fillRect(cx - r, cy - r, r * 2, r * 2);
+  }
+  return c;
+}
 function makeSmoke(size = 64) {
   const c = document.createElement('canvas'); c.width = c.height = size;
   const x = c.getContext('2d'); const h = size / 2;
@@ -37,14 +47,16 @@ export class Battle {
     this.rings = []; this.texts = []; this.scorch = []; this.streaks = []; this.embers = [];
     this.shake = 0; this.flash = 0; this.flashCol = '255,255,255'; this.t = 0;
     this.pending = { blue: 0, red: 0 }; this.intensity = 0; this.queue = [];
+    this.th = { small: 4000, shell: 50000, heavy: 250000, whale: 1e6 }; this.zoom = 1; this.celebrateT = 0;
     this.sprites = {
       blue: makeGlow(...COL.blue.glow), red: makeGlow(...COL.red.glow),
-      fire: makeGlow(255, 160, 50), white: makeGlow(255, 240, 220), smoke: makeSmoke(),
+      fire: makeGlow(255, 160, 50), white: makeGlow(255, 240, 220), smoke: makeSmoke(), cloud: makeCloud(),
     };
     this.resize = this.resize.bind(this);
     window.addEventListener('resize', this.resize);
     if (window.ResizeObserver) new ResizeObserver(this.resize).observe(canvas);
     this.resize();
+    this._initWeather();
     for (let i = 0; i < 40; i++) this.embers.push(this._ember(true));
   }
 
@@ -55,11 +67,24 @@ export class Battle {
     if (!r.width || !r.height) return;
     this.W = r.width; this.H = r.height; this.dpr = dpr;
     this.cv.width = Math.round(r.width * dpr); this.cv.height = Math.round(r.height * dpr);
+    const oT = this.laneTop, oB = this.laneBot, oW = this.W0;
     this.horizon = this.H * 0.4; this.laneTop = this.H * 0.52; this.laneBot = this.H * 0.93;
+    if (oT != null && oB > oT) for (const s of this.soldiers) { s.y = this.laneTop + (s.y - oT) / (oB - oT) * (this.laneBot - this.laneTop); if (oW) s.x *= this.W / oW; }
+    this.W0 = this.W;
     this.baseL = Math.max(34, this.W * 0.055); this.baseR = this.W - this.baseL;
     this.N = Math.round(clamp(this.W / 16, 22, 70));
     this._bg = this._renderBg();
-    for (const s of this.soldiers) s.y = clamp(s.y, this.laneTop, this.laneBot);
+    const strip = (c0, c1) => { const c = document.createElement('canvas'); c.width = 128; c.height = 1; const x = c.getContext('2d');
+      const g = x.createLinearGradient(0, 0, 128, 0); g.addColorStop(0, c0); g.addColorStop(1, c1); x.fillStyle = g; x.fillRect(0, 0, 128, 1); return c; };
+    this._tintB = strip('rgba(37,99,235,0.28)', 'rgba(37,99,235,0.05)');
+    this._tintR = strip('rgba(220,38,38,0.05)', 'rgba(220,38,38,0.28)');
+    { // 暗角（半分辨率预渲染）
+      const c = document.createElement('canvas'); const W = this.W, H = this.H; c.width = Math.ceil(W / 2); c.height = Math.ceil(H / 2);
+      const x = c.getContext('2d'); x.scale(0.5, 0.5);
+      const v = x.createRadialGradient(W / 2, H * 0.55, Math.min(W, H) * 0.4, W / 2, H * 0.55, Math.max(W, H) * 0.8);
+      v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,0.5)'); x.fillStyle = v; x.fillRect(0, 0, W, H);
+      this._vig = c;
+    }
   }
   scaleAt(y) { return 0.55 + 0.75 * clamp((y - this.horizon) / (this.H - this.horizon), 0, 1.2); }
   frontX(y = 0) {
@@ -85,17 +110,24 @@ export class Battle {
     mg.addColorStop(0, 'rgba(255,240,210,0.9)'); mg.addColorStop(0.12, 'rgba(255,220,170,0.6)');
     mg.addColorStop(0.13, 'rgba(255,200,140,0.12)'); mg.addColorStop(1, 'rgba(255,200,140,0)');
     x.fillStyle = mg; x.fillRect(0, 0, W, this.horizon);
-    // 远山两层
-    const mtn = (base, amp, col, seed) => {
-      x.fillStyle = col; x.beginPath(); x.moveTo(0, this.horizon + 2);
-      for (let px = 0; px <= W + 10; px += 8) {
+    // 远山两层（独立图层，用于视差）
+    const PAD = this.PAD = 90;
+    const mtn = (base, amp, col, seed, rim) => {
+      const m = document.createElement('canvas');
+      m.width = Math.round((W + PAD * 2) * this.dpr); m.height = Math.round((this.horizon + 4) * this.dpr);
+      const y2 = m.getContext('2d'); y2.scale(this.dpr, this.dpr);
+      y2.fillStyle = col; y2.beginPath(); y2.moveTo(0, this.horizon + 4);
+      const pts = [];
+      for (let px = 0; px <= W + PAD * 2 + 10; px += 8) {
         const y = base - amp * (0.5 + 0.3 * Math.sin(px * 0.008 + seed) + 0.2 * Math.sin(px * 0.023 + seed * 2) + 0.1 * Math.sin(px * 0.07 + seed));
-        x.lineTo(px, y);
+        y2.lineTo(px, y); pts.push([px, y]);
       }
-      x.lineTo(W, this.horizon + 2); x.closePath(); x.fill();
+      y2.lineTo(W + PAD * 2 + 10, this.horizon + 4); y2.closePath(); y2.fill();
+      y2.strokeStyle = rim; y2.lineWidth = 1; y2.beginPath(); pts.forEach(([a, b], i) => i ? y2.lineTo(a, b) : y2.moveTo(a, b)); y2.stroke();
+      return m;
     };
-    mtn(this.horizon, H * 0.16, '#141530', 1.3);
-    mtn(this.horizon + 2, H * 0.09, '#0c0d1f', 4.1);
+    this._mtnFar = mtn(this.horizon, H * 0.17, '#15163a', 1.3, 'rgba(160,140,255,0.18)');
+    this._mtnNear = mtn(this.horizon + 2, H * 0.09, '#0b0c1e', 4.1, 'rgba(255,150,170,0.12)');
     // 地面
     const g = x.createLinearGradient(0, this.horizon, 0, H);
     g.addColorStop(0, '#1a1426'); g.addColorStop(0.35, '#121522'); g.addColorStop(1, '#07080f');
@@ -110,6 +142,58 @@ export class Battle {
       x.beginPath(); x.moveTo(0, yy); x.lineTo(W, yy); x.stroke();
     }
     return c;
+  }
+
+  _initWeather() {
+    const W = this.W || 800;
+    this.clouds = Array.from({ length: 7 }, () => ({ x: rand(-100, W + 100), y: rand(0.04, 0.26), w: rand(140, 320), h: rand(30, 60), v: rand(4, 12), a: rand(0.18, 0.4) }));
+    this.fog = Array.from({ length: 9 }, () => ({ x: rand(-100, W + 100), w: rand(180, 380), h: rand(40, 80), v: rand(-8, 8), a: rand(0.25, 0.5) }));
+    this.bolts = [];
+  }
+  _drawClouds(off) {
+    const { ctx, H } = this;
+    for (const c of this.clouds) {
+      ctx.globalAlpha = c.a;
+      ctx.drawImage(this.sprites.cloud, c.x - c.w / 2 - off, c.y * H - c.h / 2, c.w, c.h);
+    }
+    ctx.globalAlpha = 1;
+  }
+  _drawLightning() {
+    const { ctx } = this;
+    for (const b of this.bolts) {
+      const k = b.life / b.max;
+      ctx.globalCompositeOperation = 'lighter';
+      for (const [w, a] of [[6, 0.15], [2, 0.9]]) {
+        ctx.strokeStyle = `rgba(${b.col},${a * k})`; ctx.lineWidth = w; ctx.beginPath();
+        b.pts.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.stroke();
+      }
+      ctx.globalCompositeOperation = 'source-over';
+    }
+  }
+  _bolt(side) {
+    let x = rand(this.W * 0.15, this.W * 0.85), y = 0; const pts = [[x, y]];
+    while (y < this.horizon - 10) { y += rand(10, 26); x += rand(-22, 22); pts.push([x, y]); }
+    const col = side === 'red' ? '255,190,180' : '190,215,255';
+    this.bolts.push({ pts, life: 0.22, max: 0.22, col });
+    this.flash = Math.max(this.flash, 0.18); this.flashCol = col;
+  }
+  setThresholds(th) { Object.assign(this.th, th); }
+  reset() {
+    this.bullets = []; this.shells = []; this.parts = []; this.texts = []; this.queue = []; this.rings = [];
+    this.pending = { blue: 0, red: 0 }; this.front = this.frontTarget = 0.5; this.surge = null;
+  }
+  // 胜利烟花
+  celebrate(side) {
+    this.celebrateT = 4; this.celebrateSide = side;
+  }
+  _firework(side) {
+    const x = rand(this.W * 0.1, this.W * 0.9), y = rand(this.H * 0.06, this.horizon * 0.85);
+    const c = side === 'blue' ? ['#93c5fd', '#60a5fa', '#e0f2fe', '#fbbf24'] : ['#fca5a5', '#f87171', '#fee2e2', '#fbbf24'];
+    this.parts.push({ type: 'glow', spr: side, x, y, vx: 0, vy: 0, life: 0.5, max: 0.5, size: 90, add: true, grow: 1 });
+    for (let i = 0; i < 46; i++) {
+      const a = (i / 46) * TAU, sp = rand(90, 190);
+      this.parts.push({ type: 'spark', x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: rand(0.8, 1.4), max: 1.4, col: c[i % c.length], w: 2, light: true });
+    }
   }
 
   // ---------- 对外接口 ----------
@@ -215,11 +299,11 @@ export class Battle {
     while (this.queue.length && budget-- > 0) {
       const { side, usd } = this.queue.shift();
       this.intensity = Math.min(this.intensity + Math.log10(usd + 10) * 0.08, 6);
-      if (usd >= 1e6) {
+      if (usd >= this.th.whale) {
         this._shell(side, usd, 'whale');
         this.onWhale && this.onWhale(side, usd);
-      } else if (usd >= 250000) this._shell(side, usd, 'heavy');
-      else if (usd >= 50000) this._shell(side, usd, 'shell');
+      } else if (usd >= this.th.heavy) this._shell(side, usd, 'heavy');
+      else if (usd >= this.th.shell) this._shell(side, usd, 'shell');
       else {
         this.pending[side] += usd;
         if (usd >= 5000 && Math.random() < 0.5) this._reinforce(side);
@@ -228,8 +312,8 @@ export class Battle {
     // 小额成交 → 前线步枪齐射（节流）
     for (const side of ['blue', 'red']) {
       let shots = 0;
-      while (this.pending[side] > 4000 && shots < 3) {
-        this.pending[side] -= 4000; shots++;
+      while (this.pending[side] > this.th.small && shots < 3) {
+        this.pending[side] -= this.th.small; shots++;
         this._rifle(side);
       }
       this.pending[side] = Math.min(this.pending[side], 60000);
@@ -332,9 +416,12 @@ export class Battle {
       }
       if (k >= 1) {
         s.done = true;
-        const power = s.kind === 'whale' ? clamp(6 + Math.log10(s.usd / 1e6) * 4, 6, 10) : s.kind === 'heavy' ? clamp(3 + Math.log10(s.usd / 250000) * 3, 3, 5.5) : clamp(1 + Math.log10(s.usd / 50000) * 2, 1, 2.8);
+        const power = s.kind === 'whale' ? clamp(6 + Math.log10(s.usd / this.th.whale) * 4, 6, 10) : s.kind === 'heavy' ? clamp(3 + Math.log10(s.usd / this.th.heavy) * 3, 3, 5.5) : clamp(1 + Math.log10(s.usd / this.th.shell) * 2, 1, 2.8);
         this.explode(s.x, s.y, s.side, power, { whale: s.kind === 'whale' });
-        if (s.usd >= 100000) this.texts.push({ x: s.x, y: s.y - 30, txt: fmtUsd(s.usd), side: s.side, life: 1.6, max: 1.6, big: s.kind !== 'heavy' && s.kind !== 'shell' });
+        // 伤害数字
+        const lvl = s.kind === 'whale' ? 3 : s.kind === 'heavy' ? 2 : 1;
+        this.texts.push({ x: s.x + rand(-10, 10), y: s.y - 24, vx: rand(-14, 14), txt: (lvl === 3 ? '暴击 ' : '-') + fmtUsd(s.usd), side: s.side, life: 1.4 + lvl * 0.3, max: 1.4 + lvl * 0.3, lvl });
+        if (s.kind === 'whale') { this.zoom = 1.07; this.shake = Math.max(this.shake, 22); }
       }
     }
     this.shells = this.shells.filter(s => !s.done);
@@ -359,7 +446,14 @@ export class Battle {
     this.smoke = this.smoke.filter(s => s.life > 0);
     for (const r of this.rings) r.t += dt;
     this.rings = this.rings.filter(r => r.t < r.life);
-    for (const t of this.texts) { t.life -= dt; t.y -= dt * 28; }
+    for (const t of this.texts) { t.life -= dt; t.y -= dt * (22 + t.lvl * 6); t.x += (t.vx || 0) * dt; }
+    for (const c of this.clouds) { c.x += c.v * dt; if (c.x - c.w / 2 > this.W + 120) c.x = -c.w / 2 - 120; }
+    for (const f of this.fog) { f.x += f.v * dt; if (f.x > this.W + 250) f.x = -250; if (f.x < -250) f.x = this.W + 250; }
+    for (const b of this.bolts) b.life -= dt;
+    this.bolts = this.bolts.filter(b => b.life > 0);
+    if (this.surgeT > 0.5 && Math.random() < dt * 0.35) this._bolt(this.lastSurge);
+    if (this.celebrateT > 0) { this.celebrateT -= dt; if (Math.random() < dt * 4) this._firework(this.celebrateSide); }
+    this.zoom = 1 + (this.zoom - 1) * Math.exp(-dt * 4);
     this.texts = this.texts.filter(t => t.life > 0);
     for (const s of this.scorch) s.life -= dt;
     this.scorch = this.scorch.filter(s => s.life > 0);
@@ -382,16 +476,24 @@ export class Battle {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const sx = (Math.random() - 0.5) * this.shake, sy = (Math.random() - 0.5) * this.shake;
     ctx.save(); ctx.translate(sx, sy);
+    if (this.zoom > 1.001) { ctx.translate(W / 2, H / 2); ctx.scale(this.zoom, this.zoom); ctx.translate(-W / 2, -H / 2); }
     ctx.drawImage(this._bg, -6, -6, W + 12, H + 12);
+    // 视差：镜头随前线推进方向平移
+    const cam = (this.front - 0.5) * 120;
+    this._drawClouds(cam * 0.15);
+    ctx.drawImage(this._mtnFar, -this.PAD - cam * 0.25, 0, W + this.PAD * 2, this.horizon + 4);
+    ctx.drawImage(this._mtnNear, -this.PAD - cam * 0.5, 0, W + this.PAD * 2, this.horizon + 4);
+    this._drawLightning();
+    // 地平线雾
+    for (const f of this.fog) {
+      ctx.globalAlpha = f.a; ctx.drawImage(this.sprites.smoke, f.x - f.w / 2 - cam * 0.6, this.horizon - f.h * 0.45, f.w, f.h);
+    }
+    ctx.globalAlpha = 1;
 
     // 领地色调
     const fx = this.frontX(this.H * 0.7);
-    let g = ctx.createLinearGradient(0, 0, fx, 0);
-    g.addColorStop(0, 'rgba(37,99,235,0.28)'); g.addColorStop(1, 'rgba(37,99,235,0.05)');
-    ctx.fillStyle = g; ctx.fillRect(0, this.horizon - 40, fx, H);
-    g = ctx.createLinearGradient(fx, 0, W, 0);
-    g.addColorStop(0, 'rgba(220,38,38,0.05)'); g.addColorStop(1, 'rgba(220,38,38,0.28)');
-    ctx.fillStyle = g; ctx.fillRect(fx, this.horizon - 40, W - fx, H);
+    ctx.drawImage(this._tintB, 0, this.horizon - 40, fx, H);
+    ctx.drawImage(this._tintR, fx, this.horizon - 40, W - fx, H);
 
     // 弹坑
     for (const s of this.scorch) {
@@ -466,10 +568,12 @@ export class Battle {
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     for (const t of this.texts) {
       const k = t.life / t.max;
-      ctx.globalAlpha = Math.min(1, k * 2);
-      ctx.font = `900 ${t.big ? 22 : 14}px "JetBrains Mono", monospace`;
-      ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(0,0,0,0.75)'; ctx.strokeText(t.txt, t.x, t.y);
-      ctx.fillStyle = t.side === 'blue' ? '#bfdbfe' : '#fecaca'; ctx.fillText(t.txt, t.x, t.y);
+      const age = t.max - t.life, pop = age < 0.18 ? 0.6 + (age / 0.18) * 0.7 : age < 0.3 ? 1.3 - (age - 0.18) / 0.12 * 0.3 : 1;
+      ctx.globalAlpha = Math.min(1, k * 2.5);
+      const fs = [0, 13, 17, 26][t.lvl || 1] * pop;
+      ctx.font = `900 ${fs}px "JetBrains Mono", monospace`;
+      ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(0,0,0,0.8)'; ctx.strokeText(t.txt, t.x, t.y);
+      ctx.fillStyle = t.lvl === 3 ? '#fde68a' : t.side === 'blue' ? '#bfdbfe' : '#fecaca'; ctx.fillText(t.txt, t.x, t.y);
     }
     ctx.globalAlpha = 1;
     ctx.restore();
@@ -483,9 +587,7 @@ export class Battle {
     }
     if (this.flash > 0.01) { ctx.fillStyle = `rgba(${this.flashCol},${this.flash})`; ctx.fillRect(0, 0, W, H); }
     // 暗角
-    const v = ctx.createRadialGradient(W / 2, H * 0.55, Math.min(W, H) * 0.4, W / 2, H * 0.55, Math.max(W, H) * 0.8);
-    v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,0.5)');
-    ctx.fillStyle = v; ctx.fillRect(0, 0, W, H);
+    ctx.drawImage(this._vig, 0, 0, W, H);
   }
 
   _drawFrontLine() {
@@ -494,7 +596,7 @@ export class Battle {
     for (let y = top; y <= bot; y += 6) pts.push([this.frontX(y), y]);
     const x0 = this.frontX(this.H * 0.7);
     ctx.globalCompositeOperation = 'lighter';
-    const passes = [[26, 0.06], [12, 0.14], [4, 0.5], [1.5, 0.9]];
+    const passes = [[20, 0.09], [5, 0.45], [1.5, 0.9]];
     for (const [w, a] of passes) {
       const g = ctx.createLinearGradient(x0 - 20, 0, x0 + 20, 0);
       g.addColorStop(0, `rgba(80,150,255,${a})`); g.addColorStop(0.5, `rgba(255,255,255,${a})`); g.addColorStop(1, `rgba(255,80,70,${a})`);
@@ -592,6 +694,6 @@ export class Battle {
 
 export function fmtUsd(v) {
   if (v >= 1e8) return '$' + (v / 1e8).toFixed(2) + '亿';
-  if (v >= 1e4) return '$' + (v / 1e4).toFixed(v >= 1e6 ? 0 : 1) + '万';
+  if (v >= 1e4) return '$' + (+(v / 1e4).toFixed(v >= 1e6 ? 0 : 1)) + '万';
   return '$' + Math.round(v).toLocaleString();
 }

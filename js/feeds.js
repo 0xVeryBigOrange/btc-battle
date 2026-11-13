@@ -2,15 +2,20 @@
 // 输出统一事件：trade / ticker / book / status
 
 export const SOURCES = {
-  binance: { name: 'Binance', symbol: 'BTC/USDT' },
-  okx: { name: 'OKX', symbol: 'BTC/USDT' },
-  coinbase: { name: 'Coinbase', symbol: 'BTC/USD' },
+  binance: { name: 'Binance', quote: 'USDT' },
+  okx: { name: 'OKX', quote: 'USDT' },
+  coinbase: { name: 'Coinbase', quote: 'USD' },
+};
+export const COINS = { btc: 'BTC', eth: 'ETH' };
+const sym = {
+  binance: (c) => c + 'usdt', binanceRest: (c) => c.toUpperCase() + 'USDT',
+  okx: (c) => c.toUpperCase() + '-USDT', coinbase: (c) => c.toUpperCase() + '-USD',
 };
 export const AUTO_ORDER = ['binance', 'okx', 'coinbase'];
 
 const BINANCE_HOSTS = [
-  { ws: 'wss://stream.binance.com:9443', rest: 'https://api.binance.com' },
   { ws: 'wss://stream.binance.com:443', rest: 'https://api.binance.com' },
+  { ws: 'wss://stream.binance.com:9443', rest: 'https://api.binance.com' },
   { ws: 'wss://data-stream.binance.vision', rest: 'https://data-api.binance.vision' },
 ];
 
@@ -46,18 +51,19 @@ function fetchJson(url, ms = 8000) {
 }
 
 // ---------------- Binance ----------------
-function connectBinance(h, hostIdx = 0) {
+function connectBinance(h, hostIdx = 0, coin = 'btc') {
+  const S = sym.binance(coin);
   const host = BINANCE_HOSTS[hostIdx];
   const book = new OrderBook();
   let closed = false, ws, buffer = [], lastU = null, syncing = false, resyncTimer;
-  const url = `${host.ws}/stream?streams=btcusdt@aggTrade/btcusdt@depth@100ms/btcusdt@miniTicker`;
+  const url = `${host.ws}/stream?streams=${S}@aggTrade/${S}@depth@100ms/${S}@miniTicker`;
   ws = new WebSocket(url);
 
   async function snapshot() {
     if (syncing || closed) return;
     syncing = true;
     try {
-      const d = await fetchJson(`${host.rest}/api/v3/depth?symbol=BTCUSDT&limit=5000`);
+      const d = await fetchJson(`${host.rest}/api/v3/depth?symbol=${sym.binanceRest(coin)}&limit=5000`);
       if (closed) return;
       book.clear();
       for (const [p, q] of d.bids) book.set('bid', +p, +q);
@@ -107,13 +113,14 @@ function connectBinance(h, hostIdx = 0) {
 }
 
 // ---------------- OKX ----------------
-function connectOKX(h) {
+function connectOKX(h, coin = 'btc') {
+  const I = sym.okx(coin);
   const book = new OrderBook();
   let closed = false, pingT, bookT;
   const ws = new WebSocket('wss://ws.okx.com/ws/v5/public');
   async function pollBook() {
     try {
-      const j = await fetchJson('https://www.okx.com/api/v5/market/books-full?instId=BTC-USDT&sz=5000');
+      const j = await fetchJson(`https://www.okx.com/api/v5/market/books-full?instId=${I}&sz=5000`);
       if (closed) return;
       const d = j.data && j.data[0]; if (!d) return;
       book.clear();
@@ -124,7 +131,7 @@ function connectOKX(h) {
   }
   ws.onopen = () => {
     ws.send(JSON.stringify({ op: 'subscribe', args: [
-      { channel: 'trades', instId: 'BTC-USDT' }, { channel: 'tickers', instId: 'BTC-USDT' }] }));
+      { channel: 'trades', instId: I }, { channel: 'tickers', instId: I }] }));
     pingT = setInterval(() => ws.readyState === 1 && ws.send('ping'), 20000);
     h.onOpen(); pollBook(); bookT = setInterval(pollBook, 2500);
   };
@@ -144,12 +151,13 @@ function connectOKX(h) {
 }
 
 // ---------------- Coinbase ----------------
-function connectCoinbase(h) {
+function connectCoinbase(h, coin = 'btc') {
+  const P = sym.coinbase(coin);
   const book = new OrderBook();
   let closed = false, lastEmit = 0;
   const ws = new WebSocket('wss://ws-feed.exchange.coinbase.com');
   ws.onopen = () => {
-    ws.send(JSON.stringify({ type: 'subscribe', product_ids: ['BTC-USD'], channels: ['matches', 'ticker', 'level2_batch'] }));
+    ws.send(JSON.stringify({ type: 'subscribe', product_ids: [P], channels: ['matches', 'ticker', 'level2_batch'] }));
     h.onOpen();
   };
   ws.onmessage = (e) => {
@@ -192,8 +200,8 @@ export class FeedManager {
     this.lastData = 0; this.fails = 0; this.gen = 0;
     this.watchdog = setInterval(() => this._check(), 2000);
   }
-  start(mode = 'auto') {
-    this.mode = mode;
+  start(mode = 'auto', coin = this.coin || 'btc') {
+    this.mode = mode; this.coin = coin;
     this.order = mode === 'auto' ? AUTO_ORDER : [mode];
     this.idx = 0; this.binanceHost = 0; this.fails = 0;
     this._connect();
@@ -216,7 +224,7 @@ export class FeedManager {
       onLog: (m) => console.warn(m),
     };
     try {
-      this.conn = src === 'binance' ? CONNECTORS.binance(hh, this.binanceHost) : CONNECTORS[src](hh);
+      this.conn = src === 'binance' ? CONNECTORS.binance(hh, this.binanceHost, this.coin) : CONNECTORS[src](hh, this.coin);
     } catch (e) { this._fail(e.message); }
   }
   _alive(label, src) {
@@ -243,4 +251,31 @@ export class FeedManager {
     setTimeout(() => { if (gen === this.gen) this._connect(); }, delay);
   }
   stop() { clearInterval(this.watchdog); if (this.conn) this.conn.close(); this.conn = null; this.gen++; }
+}
+
+// 双币迷你行情（REST 轮询，独立于主连接）：返回 { btc:{last,chg}, eth:{last,chg} }
+export async function fetchMiniTickers() {
+  const tries = [
+    async () => {
+      for (const host of ['https://api.binance.com', 'https://data-api.binance.vision']) {
+        try {
+          const j = await fetchJson(`${host}/api/v3/ticker/24hr?symbols=${encodeURIComponent('["BTCUSDT","ETHUSDT"]')}&type=MINI`, 5000);
+          const o = {};
+          for (const t of j) o[t.symbol === 'BTCUSDT' ? 'btc' : 'eth'] = { last: +t.lastPrice, chg: (+t.lastPrice / +t.openPrice - 1) * 100 };
+          return o;
+        } catch {}
+      }
+      throw new Error('binance');
+    },
+    async () => {
+      const o = {};
+      for (const c of ['btc', 'eth']) {
+        const j = await fetchJson(`https://www.okx.com/api/v5/market/ticker?instId=${c.toUpperCase()}-USDT`, 5000);
+        const t = j.data[0]; o[c] = { last: +t.last, chg: (+t.last / +t.open24h - 1) * 100 };
+      }
+      return o;
+    },
+  ];
+  for (const f of tries) { try { return await f(); } catch {} }
+  return null;
 }
