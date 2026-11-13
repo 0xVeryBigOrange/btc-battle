@@ -47,7 +47,7 @@ export class Battle {
     this.rings = []; this.texts = []; this.scorch = []; this.streaks = []; this.embers = [];
     this.shake = 0; this.flash = 0; this.flashCol = '255,255,255'; this.t = 0;
     this.pending = { blue: 0, red: 0 }; this.intensity = 0; this.queue = [];
-    this.th = { small: 4000, shell: 50000, heavy: 250000, whale: 1e6 }; this.zoom = 1; this.celebrateT = 0;
+    this.th = { small: 4000, shell: 50000, heavy: 250000, whale: 1e6 }; this.activity = { blue: 0, red: 0 }; this.popAcc = { blue: 0, red: 0 }; this.zoom = 1; this.celebrateT = 0;
     this.sprites = {
       blue: makeGlow(...COL.blue.glow), red: makeGlow(...COL.red.glow),
       fire: makeGlow(255, 160, 50), white: makeGlow(255, 240, 220), smoke: makeSmoke(), cloud: makeCloud(),
@@ -177,6 +177,8 @@ export class Battle {
     this.bolts.push({ pts, life: 0.22, max: 0.22, col });
     this.flash = Math.max(this.flash, 0.18); this.flashCol = col;
   }
+  /** 每方近期真实主动成交活跃度（0=无成交，1≈常态，上限 2） */
+  setActivity(blue, red) { this.activity.blue = clamp(blue, 0, 2); this.activity.red = clamp(red, 0, 2); }
   setThresholds(th) { Object.assign(this.th, th); }
   reset() {
     this.bullets = []; this.shells = []; this.parts = []; this.texts = []; this.queue = []; this.rings = [];
@@ -306,7 +308,7 @@ export class Battle {
       else if (usd >= this.th.shell) this._shell(side, usd, 'shell');
       else {
         this.pending[side] += usd;
-        if (usd >= 5000 && Math.random() < 0.5) this._reinforce(side);
+        if (usd >= this.th.small * 2) this._reinforce(side); // 中等成交 → 增援（确定性）
       }
     }
     // 小额成交 → 前线步枪齐射（节流）
@@ -357,8 +359,11 @@ export class Battle {
     for (const side of ['blue', 'red']) {
       const alive = this.soldiers.filter(s => !s.dead && s.side === side);
       const target = Math.round(this.N * (0.3 + 0.9 * share[side]));
-      if (alive.length < target && Math.random() < dt * 6) this._spawnSoldier(side, this.soldiers.length > 0);
-      if (alive.length > target + 3 && Math.random() < dt * 2) {
+      // 兵力向战力目标收敛（固定节奏，不随机）
+      this.popAcc[side] += dt;
+      if (alive.length < target && this.popAcc[side] >= 0.16) { this.popAcc[side] = 0; this._spawnSoldier(side, this.soldiers.length > 0); }
+      if (alive.length > target + 3 && this.popAcc[side] >= 0.5) {
+        this.popAcc[side] = 0;
         // 战损：前线士兵阵亡
         let f = alive[0];
         for (const s of alive) if (Math.abs(s.x - this.frontX(s.y)) < Math.abs(f.x - this.frontX(f.y))) f = s;
@@ -385,9 +390,11 @@ export class Battle {
       s.phase += dt * (s.moving ? 11 : 2.5) * (surging ? 1.4 : 1);
       s.facing = s.moving ? Math.sign(dx) : dir;
       if (s.recoil) s.recoil = Math.max(0, s.recoil - dt);
-      s.cool -= dt;
       const nearFront = Math.abs(s.x - fx) < 70;
-      if (nearFront && s.cool <= 0) { this._shoot(s); s.cool = rand(0.9, 2.6) / (1 + this.intensity * 0.3) / (surging ? 1.6 : 1); }
+      // 待机射击频率 ∝ 该方近 10 秒真实主动成交额；无成交时几乎不开火
+      s.cool -= dt * (this.activity[s.side] || 0);
+      if (!nearFront && s.cool < 0) s.cool = 0;
+      if (nearFront && s.cool <= 0) { this._shoot(s); s.cool = rand(0.9, 1.8); }
     }
     this.soldiers = this.soldiers.filter(s => !s.dead || s.dieT < 2.2);
 
@@ -427,7 +434,7 @@ export class Battle {
     this.shells = this.shells.filter(s => !s.done);
 
     // 前线火花（交战激烈程度）
-    const rate = 6 + this.intensity * 12;
+    const rate = this.intensity * 14; // 只由真实成交强度驱动
     if (Math.random() < rate * dt) {
       const y = rand(this.laneTop, this.laneBot), x = this.frontX(y);
       for (let i = 0; i < 3; i++) this.parts.push({ type: 'spark', x, y: y - rand(0, 20), vx: rand(-90, 90), vy: rand(-140, -30), life: rand(0.3, 0.6), max: 0.6, col: Math.random() < 0.5 ? '#bcd4ff' : '#ffc0b8', w: 1.4 });
@@ -649,7 +656,7 @@ export class Battle {
     for (let i = 0; i <= 10; i++) { const k = i / 10; ctx.lineTo(px + dir * fw * k, py - 46 + Math.sin(this.t * 5 - k * 4) * 3 * k); }
     for (let i = 10; i >= 0; i--) { const k = i / 10; ctx.lineTo(px + dir * fw * k, py - 46 + fh + Math.sin(this.t * 5 - k * 4) * 3 * k); }
     ctx.closePath(); ctx.fill();
-    ctx.fillStyle = '#fff'; ctx.font = '900 15px "Noto Sans SC", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#fff'; ctx.font = '900 15px -apple-system, "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(blue ? '多' : '空', px + dir * fw * 0.5, py - 46 + fh / 2 + Math.sin(this.t * 5 - 2) * 1.5);
   }
 

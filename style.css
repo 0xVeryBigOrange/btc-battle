@@ -2,27 +2,31 @@
   --bg:#060914;--card:rgba(13,18,36,.9);--line:rgba(120,140,200,.14);--line2:rgba(150,170,230,.28);
   --txt:#e6ebff;--mut:#8c96b8;--blue:#3b82f6;--blue2:#60a5fa;
   --red:#ef4444;--red2:#f87171;--gold:#fbbf24;--orange:#fb923c;
-  --mono:'JetBrains Mono',ui-monospace,Menlo,monospace;
-  --disp:'Orbitron','Noto Sans SC',sans-serif;
-  --cn-disp:'Ma Shan Zheng','Noto Sans SC',sans-serif;
+  --mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,'PingFang SC','Hiragino Sans GB','Microsoft YaHei','Noto Sans SC','Noto Sans CJK SC','Segoe UI',Roboto,sans-serif;
+  --disp:'Orbitron',var(--sans);
+  --cn-disp:'Ma Shan Zheng','STKaiti','KaiTi','Kaiti SC',var(--sans);
 }
 *{box-sizing:border-box}
-html,body{margin:0;background:var(--bg);color:var(--txt);font-family:'Noto Sans SC',system-ui,-apple-system,'PingFang SC','Microsoft YaHei',sans-serif;-webkit-font-smoothing:antialiased}
+html{overflow-x:hidden}
+html,body{margin:0;background:var(--bg);color:var(--txt);font-family:var(--sans);-webkit-font-smoothing:antialiased}
 body{min-height:100vh;overflow-x:hidden}
 a{color:inherit;text-decoration:none}
 .c-blue{color:var(--blue2)}.c-red{color:var(--red2)}
-.bg-grid{position:fixed;inset:0;pointer-events:none;opacity:.35;z-index:-1;
+.bg-fx{position:fixed;inset:0;overflow:hidden;pointer-events:none;z-index:-1}
+.bg-grid{position:absolute;inset:0;pointer-events:none;opacity:.35;z-index:-1;
   background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);
   background-size:44px 44px;mask-image:radial-gradient(ellipse at 50% 0%,#000 30%,transparent 75%)}
 @keyframes gridmove{to{background-position:44px 44px,44px 44px}}
-.bg-orb{position:fixed;width:60vw;height:60vw;border-radius:50%;filter:blur(90px);opacity:.22;z-index:-2;pointer-events:none}
+.bg-orb{position:absolute;width:60vw;height:60vw;border-radius:50%;filter:blur(90px);opacity:.22;z-index:-2;pointer-events:none}
 .bg-orb.b{background:#2563eb;left:-25vw;top:-30vw}
 .bg-orb.r{background:#dc2626;right:-25vw;top:-28vw;animation-delay:-8s}
 @keyframes orb{to{transform:translate(6vw,8vh) scale(1.12)}}
 
 /* ---------- 开场 ---------- */
-.intro{position:fixed;inset:0;z-index:100;display:grid;place-items:center;background:#04060d;transition:opacity .7s ease,visibility .7s;overflow:hidden}
+.intro{animation:introFail .6s 9s forwards;position:fixed;inset:0;z-index:100;display:grid;place-items:center;background:#04060d;transition:opacity .7s ease,visibility .7s;overflow:hidden}
 .intro.done{opacity:0;visibility:hidden}
+@keyframes introFail{to{opacity:0;visibility:hidden}}
 .intro-glow{position:absolute;width:70vmax;height:70vmax;border-radius:50%;filter:blur(80px);opacity:.35}
 .intro-glow.b{background:#2563eb;left:-40vmax;animation:introL 2s ease-out forwards}
 .intro-glow.r{background:#dc2626;right:-40vmax;animation:introR 2s ease-out forwards}
@@ -110,8 +114,8 @@ select option{background:#0f172a}
 .price.up{color:#93c5fd;text-shadow:0 0 26px rgba(59,130,246,.8)}
 .price.down{color:#fca5a5;text-shadow:0 0 26px rgba(239,68,68,.8)}
 .price .dg{display:inline-block}
-.price .dg.ch{animation:digit .32s ease-out}
-@keyframes digit{from{transform:translateY(-35%);opacity:.3;filter:brightness(2)}to{transform:none;opacity:1}}
+.price .dg.ch{animation:digit .45s ease-out}
+@keyframes digit{from{color:#fff;text-shadow:0 0 14px rgba(255,255,255,.9)}to{}}
 .price-meta{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--mut)}
 .price-meta b{font-family:var(--mono);color:var(--txt);font-weight:600}
 .chg{font-family:var(--mono);font-weight:700;padding:2px 8px;border-radius:7px}
@@ -137,7 +141,9 @@ select option{background:#0f172a}
   background:radial-gradient(circle,#fff 0 18%,rgba(253,230,138,.9) 30%,rgba(253,230,138,0) 70%);animation:clashp .5s ease-in-out infinite alternate}
 @keyframes clashp{to{transform:scale(1.35);filter:brightness(1.3)}}
 .power-foot{display:flex;justify-content:space-between;font-size:11px;color:var(--mut);margin-top:8px;gap:8px}
-#streak{color:var(--gold);font-weight:700}
+#streak{color:var(--gold);font-weight:700;white-space:nowrap}
+.bi{white-space:nowrap}
+#basis b{font-family:var(--mono)}
 
 .battle-card{grid-area:battle;padding:0;overflow:hidden;height:clamp(320px,52vh,580px)}
 #battle{display:block;width:100%;height:100%}
@@ -149,7 +155,7 @@ select option{background:#0f172a}
 .legend{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);font-size:11px;color:rgba(230,235,255,.6);white-space:nowrap;pointer-events:none;padding:3px 10px;border-radius:8px;background:rgba(5,8,18,.4)}
 .banner{position:absolute;top:22%;left:50%;transform:translate(-50%,-50%) scale(.6);opacity:0;pointer-events:none;text-align:center;
   font-family:var(--cn-disp);font-size:clamp(26px,5vw,56px);letter-spacing:.08em;white-space:nowrap;transition:opacity .35s,transform .45s cubic-bezier(.2,1.6,.4,1)}
-.banner small{display:block;font-family:'Noto Sans SC';font-size:.36em;letter-spacing:.2em;font-weight:800;opacity:.9;margin-top:4px}
+.banner small{display:block;font-family:var(--sans);font-size:.36em;letter-spacing:.2em;font-weight:800;opacity:.9;margin-top:4px}
 .banner.show{opacity:1;transform:translate(-50%,-50%) scale(1)}
 .banner.blue{color:#dbeafe;text-shadow:0 0 18px #3b82f6,0 0 40px #2563eb,0 4px 0 #1e3a8a}
 .banner.red{color:#fee2e2;text-shadow:0 0 18px #ef4444,0 0 40px #dc2626,0 4px 0 #7f1d1d}
@@ -185,7 +191,7 @@ canvas.depth{height:120px}
 .trades li{padding:6px 8px;border-bottom:1px solid rgba(255,255,255,.03);animation:slidein .5s ease-out;border-radius:6px}
 .trades li.buy{background:linear-gradient(90deg,rgba(59,130,246,var(--a,.08)),transparent)}
 .trades li.sell{background:linear-gradient(90deg,rgba(239,68,68,var(--a,.08)),transparent)}
-.trades li .s{font-family:'Noto Sans SC';font-weight:800}
+.trades li .s{font-family:var(--sans);font-weight:800}
 .trades li.buy .s{color:var(--blue2)}.trades li.sell .s{color:var(--red2)}
 .trades li.whale{box-shadow:inset 3px 0 0 var(--gold);animation:slidein .5s ease-out,whale 1.2s ease-out}
 @keyframes whale{0%,30%{background-color:rgba(251,191,36,.25)}}
@@ -217,7 +223,7 @@ canvas.depth{height:120px}
   .coin-tabs button{flex:1;justify-content:center}
 }
 @media (max-width:1000px){
-  .layout{grid-template-columns:1fr 1fr;grid-template-areas:"price price" "battle battle" "taker book" "trades trades"}
+  .layout{grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-areas:"price price" "battle battle" "taker book" "trades trades"}
 }
 @media (max-width:640px){
   .topbar{grid-template-columns:1fr auto;gap:10px;padding:12px}
@@ -230,16 +236,25 @@ canvas.depth{height:120px}
   .status{max-width:44px;padding:7px 10px}.status #statusText{display:none}
   .controls{gap:6px}select{max-width:78px}
   .coin-tabs button{flex-direction:column;align-items:center;gap:1px;padding:6px 8px}
-  .layout{grid-template-columns:1fr;grid-template-areas:"price" "battle" "taker" "book" "trades";gap:10px;padding:0 10px 14px}
+  .layout{grid-template-columns:minmax(0,1fr);grid-template-areas:"price" "battle" "taker" "book" "trades";gap:10px;padding:0 10px 14px}
   .card{padding:14px;border-radius:16px}
-  .price-card{grid-template-columns:1fr;row-gap:12px}
+  .price-card{grid-template-columns:minmax(0,1fr);row-gap:12px}
+  .sm-hide{display:none}
+  .pl{gap:5px}
   .price{font-size:40px}
   .pl b{font-size:18px}.state{font-size:12px;padding:4px 10px}
-  .power-foot span:first-child{display:none}
+  .power-foot{flex-direction:column;gap:4px}
+  #basis{font-size:10.5px;line-height:1.5}
   .battle-card{height:340px;padding:0}
   .legend{font-size:9.5px}
   .hud-l,.hud-r{font-size:11px}.flag{width:22px;height:22px}
   .trades-head,.trades li{grid-template-columns:54px 40px 1fr .8fr 1fr;font-size:11px}
   .au-links{margin-left:0;width:100%}.au-btn{flex:1;justify-content:center}
+}
+@media (max-width:380px){
+  .wm-en{font-size:14px;letter-spacing:.06em}.wm-cn{font-size:13px}
+  .logo{width:34px;height:34px}.brand{gap:8px}
+  select{max-width:70px;padding:0 6px}
+  .by-badge{margin-left:42px}
 }
 @media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;animation-iteration-count:1!important}}

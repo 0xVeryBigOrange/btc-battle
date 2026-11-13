@@ -7,6 +7,7 @@
 <meta name="description" content="Crypto War · 多空战场：BTC / ETH 实时价格、挂单与吃单对决，蓝军（多）vs 红军（空）动画战场。by 大橙子 @0xVeryBigOrange" />
 <meta name="author" content="大橙子 (Big Orange) @0xVeryBigOrange" />
 <meta name="theme-color" content="#070a14" />
+<meta http-equiv="Cache-Control" content="no-cache" />
 <meta property="og:type" content="website" />
 <meta property="og:site_name" content="Crypto War · 多空战场" />
 <meta property="og:title" content="Crypto War · 多空战场 ⚔️ 蓝军(多) vs 红军(空)" />
@@ -25,8 +26,10 @@
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚔️</text></svg>" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Ma+Shan+Zheng&family=JetBrains+Mono:wght@500;700;800&family=Noto+Sans+SC:wght@400;600;800;900&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="style.css" />
+<!-- 网页字体异步加载，不阻塞渲染；加载失败时使用系统字体 -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Ma+Shan+Zheng&family=JetBrains+Mono:wght@500;700;800&display=swap" media="print" onload="this.media='all'" />
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Ma+Shan+Zheng&family=JetBrains+Mono:wght@500;700;800&display=swap" /></noscript>
+<link rel="stylesheet" href="style.css?v=9964d7aa" />
 </head>
 <body>
 <!-- 开场 -->
@@ -41,8 +44,7 @@
   </div>
 </div>
 
-<div class="bg-grid"></div>
-<div class="bg-orb b"></div><div class="bg-orb r"></div>
+<div class="bg-fx"><div class="bg-grid"></div><div class="bg-orb b"></div><div class="bg-orb r"></div></div>
 
 <header class="topbar">
   <div class="brand-wrap">
@@ -97,15 +99,15 @@
     </div>
     <div class="power">
       <div class="power-labels">
-        <span class="c-blue pl"><i class="pl-flag blue">多</i>蓝军战力 <b id="bluePow">50</b>%</span>
+        <span class="c-blue pl"><i class="pl-flag blue">多</i><span>蓝军<span class="sm-hide">战力</span></span> <span><b id="bluePow">50</b>%</span></span>
         <span id="battleState" class="state">⚖️ 两军对峙</span>
-        <span class="c-red pl pr"><b id="redPow">50</b>% 红军战力<i class="pl-flag red">空</i></span>
+        <span class="c-red pl pr"><span><b id="redPow">50</b>%</span> <span>红军<span class="sm-hide">战力</span></span><i class="pl-flag red">空</i></span>
       </div>
       <div class="power-bar" id="powerBar">
         <div class="pb-blue" id="pbBlue"></div><div class="pb-red" id="pbRed"></div>
         <div class="pb-clash" id="pbClash"></div>
       </div>
-      <div class="power-foot"><span>战力 = 10 秒吃单 + 1 分钟吃单 + ±0.5% 挂单厚度</span><span id="streak"></span></div>
+      <div class="power-foot"><span id="basis" title="战力 = 价格涨跌 50%（10秒 + 1分钟）+ 吃单 30%（10秒 + 1分钟）+ ±0.5% 挂单 20%">战况依据：等待数据…</span><span id="streak"></span></div>
     </div>
   </section>
 
@@ -181,6 +183,6 @@
   </div>
   <p class="disclaimer">数据来自 Binance / OKX / Coinbase 公共行情（无需 API Key），仅供娱乐参考，不构成投资建议 · 蓝 = 多 / 买方，红 = 空 / 卖方</p>
 </footer>
-<script type="module" src="js/app.js"></script>
+<script type="module" src="js/app.js?v=9964d7aa"></script>
 </body>
 </html>

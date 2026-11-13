@@ -1,5 +1,5 @@
-import { FeedManager, SOURCES, COINS, fetchMiniTickers } from './feeds.js';
-import { Battle, fmtUsd } from './battle.js';
+import { FeedManager, SOURCES, COINS, fetchMiniTickers } from './feeds.js?v=9964d7aa';
+import { Battle, fmtUsd } from './battle.js?v=9964d7aa';
 
 const $ = (id) => document.getElementById(id);
 const pad = (n) => String(n).padStart(2, '0');
@@ -35,15 +35,18 @@ setTimeout(finishIntro, 7000); // 最长等待
 const battle = new Battle($('battle'));
 battle.start();
 window.__battle = battle; // 调试用
+window.__cw = () => S.dbg;
 
 // ---------- 状态 ----------
 const S = {
   src: null, last: 0, shownStr: '', open24h: 0, tradesThisSec: 0,
   buckets: new Array(300).fill(null).map(() => ({ sec: 0, b: 0, s: 0, bu: 0, su: 0 })),
+  px: new Array(120).fill(null).map(() => ({ sec: 0, p: 0 })), tickDir: 0,
   book: null, threshold: 0, surge: null, surgeSince: 0, wonFor: null, sound: false,
 };
 function resetStats() {
   for (const b of S.buckets) { b.sec = 0; b.b = b.s = b.bu = b.su = 0; }
+  for (const x of S.px) { x.sec = 0; x.p = 0; } S.tickDir = 0;
   S.book = null; S.last = 0; S.shownStr = ''; S.open24h = 0; S.hi = 0;
   S.surge = null; S.wonFor = null; smoothS = 0;
   $('price').textContent = '--'; $('chg').textContent = '--'; $('chg').className = 'chg';
@@ -54,6 +57,16 @@ function bucket(sec) {
   const b = S.buckets[sec % 300];
   if (b.sec !== sec) { b.sec = sec; b.b = b.s = b.bu = b.su = 0; }
   return b;
+}
+// N 秒涨跌幅（%）：用 N 秒前（或最早可用的）每秒收盘价
+function priceChange(secs) {
+  if (!S.last) return 0;
+  const now = Math.floor(Date.now() / 1000);
+  for (let k = secs; k >= Math.min(5, secs); k--) {
+    const x = S.px[(now - k) % 120];
+    if (x.sec === now - k && x.p) return (S.last / x.p - 1) * 100;
+  }
+  return 0;
 }
 function windowSum(secs) {
   const now = Math.floor(Date.now() / 1000); let b = 0, s = 0, bu = 0, su = 0;
@@ -68,7 +81,9 @@ function onTrade(t) {
   S.tradesThisSec++;
   const sec = Math.floor(Date.now() / 1000), bk = bucket(sec), usd = t.price * t.qty;
   if (t.side === 'buy') { bk.b += t.qty; bk.bu += usd; } else { bk.s += t.qty; bk.su += usd; }
+  if (S.last && t.price !== S.last) S.tickDir = t.price > S.last ? 1 : -1;
   S.last = t.price;
+  const ph = S.px[sec % 120]; ph.sec = sec; ph.p = t.price; // 每秒最后成交价
   if (pend && pend.side === t.side && Math.abs(pend.ts - t.ts) <= 5) { pend.qty += t.qty; pend.usd += usd; pend.price = t.price; }
   else { flushPend(); pend = { ...t, usd }; pendTimer = setTimeout(flushPend, 80); }
 }
@@ -263,11 +278,11 @@ function drawFlow() {
   x.strokeStyle = '#fbbf24'; x.lineWidth = 1.8; x.shadowColor = '#fbbf24'; x.shadowBlur = 6; x.beginPath();
   cumPts.forEach((c, i) => { const y = mid - (c / cm) * (mid - 6); i ? x.lineTo(i * bw + bw / 2, y) : x.moveTo(bw / 2, y); });
   x.stroke(); x.shadowBlur = 0;
-  x.fillStyle = 'rgba(230,235,255,.5)'; x.font = '10px Noto Sans SC'; x.fillText('近 2 分钟 主动买(上) / 卖(下) · 黄线=累计净额', 6, 12);
+  x.fillStyle = 'rgba(230,235,255,.5)'; x.font = '10px -apple-system, "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif'; x.fillText('近 2 分钟 主动买(上) / 卖(下) · 黄线=累计净额', 6, 12);
 }
 function drawDepth(d) {
   const [x, W, H] = prepCanvas($('depthChart'));
-  if (!d) { x.fillStyle = 'rgba(230,235,255,.5)'; x.font = '12px Noto Sans SC'; x.fillText('等待盘口数据…', 10, 20); return; }
+  if (!d) { x.fillStyle = 'rgba(230,235,255,.5)'; x.font = '12px -apple-system, "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif'; x.fillText('等待盘口数据…', 10, 20); return; }
   const NB = d.bins.bid.length; let cb = 0, ca = 0; const cbA = [], caA = [];
   for (let i = 0; i < NB; i++) { cb += d.bins.bid[i]; ca += d.bins.ask[i]; cbA.push(cb); caA.push(ca); }
   const mx = Math.max(cb, ca, 1), mid = W / 2, base = H - 14;
@@ -282,7 +297,7 @@ function drawDepth(d) {
   area(cbA, -1, 'rgba(59,130,246,.7)', 'rgba(59,130,246,.05)', '#93c5fd');
   area(caA, 1, 'rgba(239,68,68,.7)', 'rgba(239,68,68,.05)', '#fca5a5');
   x.fillStyle = 'rgba(255,255,255,.4)'; x.fillRect(mid, 10, 1, base - 10);
-  x.fillStyle = 'rgba(230,235,255,.55)'; x.font = '10px JetBrains Mono';
+  x.fillStyle = 'rgba(230,235,255,.55)'; x.font = '10px "JetBrains Mono", monospace';
   x.textAlign = 'left'; x.fillText('-1%', 2, H - 3); x.textAlign = 'right'; x.fillText('+1%', W - 2, H - 3);
   x.textAlign = 'center'; x.fillText(fmtP(d.mid), mid, H - 3);
   x.textAlign = 'left'; x.fillText('买盘城墙 ' + fmtUsd(cb), 4, 11); x.textAlign = 'right'; x.fillText('卖盘城墙 ' + fmtUsd(ca), W - 4, 11);
@@ -323,8 +338,24 @@ function refresh() {
   }
   drawDepth(d); drawFlow();
 
-  const raw = 0.35 * i10 + 0.35 * i60 + 0.3 * ib;
+  // ===== 战力模型（全部来自实时行情，无随机）=====
+  // 价格涨跌占 50%：10 秒 25% + 1 分钟 25%；吃单 30%；挂单 20%
+  const ch10 = priceChange(10), ch60 = priceChange(60);
+  const k = coin === 'eth' ? 1.5 : 1; // ETH 波动更大，归一化尺度放宽
+  const p10 = Math.tanh(ch10 / (0.03 * k)), p60 = Math.tanh(ch60 / (0.10 * k));
+  const raw = 0.25 * p10 + 0.25 * p60 + 0.15 * i10 + 0.15 * i60 + 0.2 * ib;
   smoothS = smoothS * 0.6 + raw * 0.4;
+  // 待机射击频率 ∝ 每方近 10 秒主动成交额
+  const ref = cfg().th.shell * 4;
+  battle.setActivity(w10.bu / ref, w10.su / ref);
+  S.dbg = { t: Date.now(), price: S.last, ch10, ch60, p10, p60, i10, i60, ib, raw, s: smoothS, front: battle.front, target: battle.frontTarget, actB: w10.bu / ref, actR: w10.su / ref };
+  const pc = (v) => `<b class="${v >= 0 ? 'c-blue' : 'c-red'}">${v >= 0 ? '+' : ''}${v.toFixed(3)}%</b>`;
+  const rt = (v) => { const b = Math.round((v + 1) * 50); return `<b><span class="c-blue">${b}</span>:<span class="c-red">${100 - b}</span></b>`; };
+  const bi = (x) => `<span class="bi">${x}</span>`;
+  $('basis').innerHTML = '战况依据：' + [
+    `10秒 ${pc(ch10)}`, `1分钟 ${pc(ch60)}`,
+    `最新 ${S.tickDir > 0 ? '<b class="c-blue">↑</b>' : S.tickDir < 0 ? '<b class="c-red">↓</b>' : '–'}`,
+    `吃单买:卖 ${rt(i60)}`, `挂单买:卖 ${rt(ib)}`].map(bi).join(' · ');
   const s = smoothS, blueShare = 0.5 + 0.5 * s;
   battle.setFront(0.5 + Math.tanh(s * 1.6) * 0.5);
   const bp = Math.round(blueShare * 100);
