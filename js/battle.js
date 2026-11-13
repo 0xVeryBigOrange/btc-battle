@@ -9,6 +9,8 @@ const COL = {
   red: { main: '#ef4444', light: '#fca5a5', dark: '#7f1d1d', armor: '#b91c1c', glow: [255, 80, 70] },
 };
 
+const colOf = (side) => COL[side] || COL.blue;
+
 function makeGlow(r, g, b, size = 64) {
   const c = document.createElement('canvas'); c.width = c.height = size;
   const x = c.getContext('2d'); const h = size / 2;
@@ -178,14 +180,14 @@ export class Battle {
     const n = Math.min(14 + power * 10, 90);
     for (let i = 0; i < n; i++) {
       const a = rand(Math.PI, TAU) + rand(-0.3, 0.3), sp = rand(60, 160) * (0.6 + power * 0.25);
-      this.parts.push({ type: 'spark', x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: rand(0.4, 1.0), max: 1, col: Math.random() < 0.5 ? '#ffd27a' : COL[side].light, w: rand(1, 2.4) });
+      this.parts.push({ type: 'spark', x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: rand(0.4, 1.0), max: 1, col: Math.random() < 0.5 ? '#ffd27a' : colOf(side).light, w: rand(1, 2.4) });
     }
     for (let i = 0; i < Math.min(4 + power * 2, 20); i++) {
       const a = rand(Math.PI * 1.1, Math.PI * 1.9), sp = rand(80, 220);
       this.parts.push({ type: 'debris', x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: rand(0.8, 1.6), max: 1.6, s: rand(1.5, 3.5), rot: rand(0, TAU), vr: rand(-10, 10) });
     }
     for (let i = 0; i < Math.min(5 + power * 3, 28); i++) this._smoke(x + rand(-R, R) * 0.6, y - rand(0, R * 0.6), rand(R * 0.5, R * 1.1), rand(-20, 20), rand(-40, -12), rand(1.6, 3.4));
-    this.rings.push({ x, y, r: 4, max: R * (opts.whale ? 6 : 2.6), life: opts.whale ? 0.9 : 0.5, t: 0, col: COL[side].glow });
+    this.rings.push({ x, y, r: 4, max: R * (opts.whale ? 6 : 2.6), life: opts.whale ? 0.9 : 0.5, t: 0, col: colOf(side).glow });
     if (this.scorch.length > 40) this.scorch.shift();
     this.scorch.push({ x, y, r: R * 0.9, life: 14 });
     this.shake = Math.max(this.shake, Math.min(2 + power * 1.5, 18));
@@ -309,7 +311,7 @@ export class Battle {
     for (const b of this.bullets) {
       b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt;
       if (b.life <= 0) {
-        for (let i = 0; i < 4; i++) this.parts.push({ type: 'spark', x: b.x, y: b.y, vx: rand(-80, 80), vy: rand(-110, -20), life: rand(0.15, 0.35), max: 0.35, col: COL[b.side].light, w: 1.2 });
+        for (let i = 0; i < 4; i++) this.parts.push({ type: 'spark', x: b.x, y: b.y, vx: rand(-80, 80), vy: rand(-110, -20), life: rand(0.15, 0.35), max: 0.35, col: colOf(b.side).light, w: 1.2 });
         if (Math.random() < 0.06) this._killNear(b.side === 'blue' ? 'red' : 'blue', b.x, b.y + 10, 9);
       }
     }
@@ -365,7 +367,7 @@ export class Battle {
 
     // 冲锋速度线
     if (this.surgeT > 0.2 && Math.random() < dt * 30 * this.surgeT) {
-      const side = this.lastSurge, dir = side === 'blue' ? 1 : -1;
+      const side = this.lastSurge || this.surge || 'blue', dir = side === 'blue' ? 1 : -1;
       this.streaks.push({ x: dir > 0 ? -100 : this.W + 100, y: rand(this.H * 0.15, this.H * 0.95), v: dir * rand(900, 1500), len: rand(60, 180), side, life: 1.5 });
     }
     for (const s of this.streaks) { s.x += s.v * dt; s.life -= dt; }
@@ -418,13 +420,13 @@ export class Battle {
       const len = 0.03;
       ctx.strokeStyle = b.side === 'blue' ? 'rgba(147,197,253,0.95)' : 'rgba(252,165,165,0.95)';
       ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(b.x, b.y); ctx.lineTo(b.x - b.vx * len, b.y - b.vy * len); ctx.stroke();
-      ctx.drawImage(this.sprites[b.side], b.x - 6, b.y - 6, 12, 12);
+      ctx.drawImage((this.sprites[b.side] || this.sprites.blue), b.x - 6, b.y - 6, 12, 12);
     }
     for (const p of this.parts) {
       const k = clamp(p.life / p.max, 0, 1);
       if (p.type === 'glow') {
         const sz = p.size * (p.grow ? 1 + (1 - k) * p.grow : 1);
-        ctx.globalAlpha = k; ctx.drawImage(this.sprites[p.spr], p.x - sz / 2, p.y - sz / 2, sz, sz);
+        ctx.globalAlpha = k; ctx.drawImage((this.sprites[p.spr] || this.sprites.white), p.x - sz / 2, p.y - sz / 2, sz, sz);
       } else if (p.type === 'spark') {
         ctx.globalAlpha = k; ctx.strokeStyle = p.col; ctx.lineWidth = p.w;
         ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x - p.vx * 0.03, p.y - p.vy * 0.03); ctx.stroke();
@@ -434,7 +436,7 @@ export class Battle {
       const big = s.kind === 'whale' ? 3 : s.kind === 'heavy' ? 2 : 1.3;
       ctx.globalAlpha = 1;
       ctx.drawImage(this.sprites.white, s.x - 8 * big, s.y - 8 * big, 16 * big, 16 * big);
-      ctx.drawImage(this.sprites[s.side], s.x - 16 * big, s.y - 16 * big, 32 * big, 32 * big);
+      ctx.drawImage((this.sprites[s.side] || this.sprites.blue), s.x - 16 * big, s.y - 16 * big, 32 * big, 32 * big);
     }
     for (const r of this.rings) {
       const k = r.t / r.life, rad = lerp(r.r, r.max, 1 - Math.pow(1 - k, 3));
@@ -443,7 +445,7 @@ export class Battle {
     }
     // 速度线
     for (const s of this.streaks) {
-      const c = COL[s.side].glow;
+      const c = colOf(s.side).glow;
       const gr = ctx.createLinearGradient(s.x, 0, s.x - Math.sign(s.v) * s.len, 0);
       gr.addColorStop(0, `rgba(${c.join(',')},${0.55 * this.surgeT})`); gr.addColorStop(1, `rgba(${c.join(',')},0)`);
       ctx.globalAlpha = 1; ctx.strokeStyle = gr; ctx.lineWidth = 2;
@@ -509,7 +511,7 @@ export class Battle {
 
   _drawBase(side) {
     const { ctx, H } = this; const blue = side === 'blue';
-    const c = COL[side]; const x = blue ? this.baseL : this.baseR; const by = H * 0.66;
+    const c = colOf(side); const x = blue ? this.baseL : this.baseR; const by = H * 0.66;
     const w = clamp(this.W * 0.05, 30, 54), h = clamp(H * 0.32, 80, 170);
     // 底部光晕
     ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.6;
@@ -550,7 +552,7 @@ export class Battle {
   }
 
   _drawSoldier(s) {
-    const { ctx } = this; const c = COL[s.side]; const sc = this.scaleAt(s.y);
+    const { ctx } = this; const c = colOf(s.side); const sc = this.scaleAt(s.y);
     const fade = s.dead ? clamp(1 - (s.dieT - 1.2), 0, 1) : 1;
     if (fade <= 0) return;
     const face = s.facing || (s.side === 'blue' ? 1 : -1);
