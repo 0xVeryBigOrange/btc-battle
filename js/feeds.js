@@ -70,7 +70,9 @@ function connectBinance(h, hostIdx = 0, coin = 'btc') {
       for (const [p, q] of d.asks) book.set('ask', +p, +q);
       lastU = d.lastUpdateId;
       const pending = buffer; buffer = [];
-      for (const ev of pending) applyDiff(ev, true);
+      for (let i = 0; i < pending.length; i++) { applyDiff(pending[i], true); if (lastU == null) { buffer = pending.slice(i); break; } }
+      // 快照比缓冲的增量还旧（中间缺包）→ 重新拉快照，否则盘口会一直停在旧状态直到下次定时刷新
+      if (lastU == null) { syncing = false; setTimeout(snapshot, 500); return; }
       book.ready = true;
       h.onBook(book);
     } catch (e) {
@@ -84,7 +86,7 @@ function connectBinance(h, hostIdx = 0, coin = 'btc') {
     if (lastU == null) { buffer.push(ev); return; }
     if (ev.u <= lastU) return;
     if (ev.U > lastU + 1) { // 丢包，重新同步
-      book.ready = false; lastU = null; buffer = [ev]; snapshot(); return;
+      book.ready = false; lastU = null; buffer = [ev]; if (!fromBuffer) snapshot(); return;
     }
     for (const [p, q] of ev.b) book.set('bid', +p, +q);
     for (const [p, q] of ev.a) book.set('ask', +p, +q);
@@ -251,6 +253,19 @@ export class FeedManager {
     setTimeout(() => { if (gen === this.gen) this._connect(); }, delay);
   }
   stop() { clearInterval(this.watchdog); if (this.conn) this.conn.close(); this.conn = null; this.gen++; }
+}
+
+// Binance 最近 N 秒的 1 秒 K 线（含主动买入量），用于开页时回填 10秒/1分钟/5分钟 窗口
+// 返回 [{ t: 开盘毫秒(交易所时间), c: 收盘价, v: 成交量, tb: 主动买入量, q: 成交额, tbq: 主动买入额, n: 笔数 }]
+export async function fetchBinance1s(coin, hostIdx = 0, limit = 300) {
+  const hosts = [BINANCE_HOSTS[hostIdx].rest, ...BINANCE_HOSTS.map(h => h.rest)].filter((v, i, a) => a.indexOf(v) === i);
+  for (const host of hosts) {
+    try {
+      const k = await fetchJson(`${host}/api/v3/klines?symbol=${sym.binanceRest(coin)}&interval=1s&limit=${limit}`, 6000);
+      return k.map(x => ({ t: x[0], c: +x[4], v: +x[5], q: +x[7], n: x[8], tb: +x[9], tbq: +x[10] }));
+    } catch {}
+  }
+  return null;
 }
 
 // 双币迷你行情（REST 轮询，独立于主连接）：返回 { btc:{last,chg}, eth:{last,chg} }

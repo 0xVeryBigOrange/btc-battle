@@ -1,6 +1,6 @@
-import { FeedManager, SOURCES, COINS, fetchMiniTickers } from './feeds.js?v=dd964b07';
-import { Battle, fmtUsd } from './battle.js?v=dd964b07';
-import { AudioController } from './music.js?v=dd964b07';
+import { FeedManager, SOURCES, COINS, fetchMiniTickers, fetchBinance1s } from './feeds.js?v=11302efd';
+import { Battle, fmtUsd } from './battle.js?v=11302efd';
+import { AudioController } from './music.js?v=11302efd';
 
 const $ = (id) => document.getElementById(id);
 const pad = (n) => String(n).padStart(2, '0');
@@ -53,12 +53,14 @@ const S = {
   buckets: new Array(300).fill(null).map(() => ({ sec: 0, b: 0, s: 0, bu: 0, su: 0, n: 0 })),
   px: new Array(120).fill(null).map(() => ({ sec: 0, p: 0 })), tickDir: 0,
   book: null, threshold: 0, surge: null, surgeSince: 0, wonFor: null,
+  since: 0, liveSec: null, bfGen: 0, // since: 统计窗口最早的完整秒；liveSec: 本次连接首笔实时成交所在秒
 };
 function resetStats() {
   for (const b of S.buckets) { b.sec = 0; b.b = b.s = b.bu = b.su = b.n = 0; }
   for (const x of S.px) { x.sec = 0; x.p = 0; } S.tickDir = 0;
   S.book = null; S.last = 0; S.shownStr = ''; S.open24h = 0; S.hi = 0;
   S.surge = null; S.wonFor = null; smoothS = 0;
+  S.since = 0; S.liveSec = null; S.bfGen++;
   $('price').textContent = '--'; $('chg').textContent = '--'; $('chg').className = 'chg';
   ['hi', 'lo', 'vol'].forEach(id => $(id).textContent = '--');
   $('trades').innerHTML = '<li class="empty">等待大单出现…</li>';
@@ -72,7 +74,12 @@ function bucket(sec) {
 function priceChange(secs) {
   if (!S.last) return 0;
   const now = Math.floor(Date.now() / 1000);
-  for (let k = secs; k >= Math.min(5, secs); k--) {
+  // 先找 N 秒前那一秒；那一秒没成交则往更早找（价格沿用上一笔），历史不足时才退到较近的秒
+  for (let k = secs; k < Math.min(secs + 30, 120); k++) {
+    const x = S.px[(now - k) % 120];
+    if (x.sec === now - k && x.p) return (S.last / x.p - 1) * 100;
+  }
+  for (let k = secs - 1; k >= Math.min(5, secs); k--) {
     const x = S.px[(now - k) % 120];
     if (x.sec === now - k && x.p) return (S.last / x.p - 1) * 100;
   }
@@ -87,9 +94,11 @@ function windowSum(secs) {
 // ---------- 成交合并 ----------
 let pend = null, pendTimer = null;
 function flushPend() { if (!pend) return; const t = pend; pend = null; clearTimeout(pendTimer); onMergedTrade(t); }
-function onTrade(t) {
+function onTrade(t, src) {
   S.tradesThisSec++;
   const sec = Math.floor(Date.now() / 1000), bk = bucket(sec), usd = t.price * t.qty;
+  if (!S.since) S.since = sec;
+  if (S.liveSec == null) { S.liveSec = sec; if (src === 'binance') setTimeout(backfill, 1500, S.bfGen, t.ts, Date.now() - t.ts, sec); }
   if (t.side === 'buy') { bk.b += t.qty; bk.bu += usd; } else { bk.s += t.qty; bk.su += usd; }
   bk.n++;
   if (S.last && t.price !== S.last) { S.tickDir = t.price > S.last ? 1 : -1; audio.tick(S.tickDir); } // 价格每跳一下 → 旋律走一步
@@ -116,6 +125,23 @@ function addTradeRow(t) {
   while (ul.children.length > 60) ul.lastChild.remove();
 }
 
+// 开页/重连时用 Binance 1 秒 K 线回填之前的成交（主动买卖量与每秒收盘价），
+// 这样 10 秒 / 1 分钟 / 5 分钟 一打开就是完整窗口，而不是“从打开网页起累计”
+async function backfill(gen, firstTs, skew, liveSec) {
+  const k = await fetchBinance1s(coin, fm.binanceHost || 0, 300);
+  if (!k || gen !== S.bfGen) return;
+  const now = Math.floor(Date.now() / 1000);
+  for (const x of k) {
+    if (x.t + 1000 > firstTs) continue; // 只回填首笔实时成交之前的完整秒，避免重复计算
+    const ls = Math.floor((x.t + skew) / 1000);
+    if (ls >= liveSec || ls <= now - 300) continue;
+    const b = S.buckets[ls % 300];
+    if (b.sec !== ls) { b.sec = ls; b.b = x.tb; b.s = x.v - x.tb; b.bu = x.tbq; b.su = x.q - x.tbq; b.n = x.n; }
+    if (ls > now - 120 && x.v > 0) { const ph = S.px[ls % 120]; if (ph.sec !== ls) { ph.sec = ls; ph.p = x.c; } }
+    if (!S.since || ls < S.since) S.since = ls;
+  }
+}
+
 // ---------- 数据源 ----------
 const statusEl = $('status');
 const fm = new FeedManager({
@@ -123,6 +149,7 @@ const fm = new FeedManager({
     statusEl.className = 'status ' + state;
     const txt = { connecting: `正在连接 ${label}…`, open: `已连接 ${label}，等待数据…`, live: `实时 · ${label}`, error: `${SOURCES[src].name} ${label}，重试/切换中…` }[state];
     $('statusText').textContent = txt; statusEl.title = txt;
+    if (state === 'connecting' || state === 'open') S.liveSec = null; // 新连接 → 首笔成交后重新回填断线期间
     if (state === 'connecting') introStep(40, `连接战场情报 · ${label}…`);
     if (state === 'open') introStep(65, '侦察敌情中…');
     if (state === 'live') { introStep(90, '部队就位'); finishIntro(); }
@@ -232,11 +259,11 @@ function tweenNum(el, to, fmt = (v) => Math.round(v)) {
 }
 
 // ---------- 比例条 ----------
-function setRatio(prefix, a, b, la, lb, fmtA, fmtB) {
+function setRatio(prefix, a, b, la, lb, fmtA, fmtB, note = '') {
   const tot = a + b, pa = tot ? a / tot : 0.5;
   $(prefix + 'b').style.width = (pa * 100).toFixed(1) + '%';
   $(prefix + 'r').style.width = ((1 - pa) * 100).toFixed(1) + '%';
-  $(prefix + 'pct').innerHTML = tot ? `<span class="c-blue">${(pa * 100).toFixed(0)}%</span> : <span class="c-red">${((1 - pa) * 100).toFixed(0)}%</span>` : '--';
+  $(prefix + 'pct').innerHTML = (note ? `<small class="rb-note">${note}</small> ` : '') + (tot ? `<span class="c-blue">${(pa * 100).toFixed(0)}%</span> : <span class="c-red">${((1 - pa) * 100).toFixed(0)}%</span>` : '--');
   $(prefix + la).textContent = fmtA; $(prefix + lb).textContent = fmtB;
   return tot ? pa * 2 - 1 : 0;
 }
@@ -333,9 +360,12 @@ function refresh() {
   const C = COINS[coin];
   const w10 = windowSum(10), w60 = windowSum(60), w300 = windowSum(300);
   const f = (q, u) => `${fmtQ(q)} ${C} · ${fmtUsd(u)}`;
-  const i10 = setRatio('tk10', w10.bu, w10.su, 'buy', 'sell', '买 ' + f(w10.b, w10.bu), '卖 ' + f(w10.s, w10.su));
-  const i60 = setRatio('tk60', w60.bu, w60.su, 'buy', 'sell', '买 ' + f(w60.b, w60.bu), '卖 ' + f(w60.s, w60.su));
-  setRatio('tk300', w300.bu, w300.su, 'buy', 'sell', '买 ' + f(w300.b, w300.bu), '卖 ' + f(w300.s, w300.su));
+  // 窗口还没攒满（非 Binance 源无法回填历史 / 回填未完成）时如实标注已统计的秒数
+  const cov = S.since ? Math.floor(Date.now() / 1000) - S.since + 1 : 0;
+  const nt = (n) => cov < n ? `仅${cov}秒` : '';
+  const i10 = setRatio('tk10', w10.bu, w10.su, 'buy', 'sell', '买 ' + f(w10.b, w10.bu), '卖 ' + f(w10.s, w10.su), nt(10));
+  const i60 = setRatio('tk60', w60.bu, w60.su, 'buy', 'sell', '买 ' + f(w60.b, w60.bu), '卖 ' + f(w60.s, w60.su), nt(60));
+  setRatio('tk300', w300.bu, w300.su, 'buy', 'sell', '买 ' + f(w300.b, w300.bu), '卖 ' + f(w300.s, w300.su), nt(300));
   const dl = w300.bu - w300.su, de = $('delta');
   const dq = w300.b - w300.s;
   de.textContent = (dl >= 0 ? '+' : '-') + fmtUsd(Math.abs(dl)) + ` (${dq >= 0 ? '+' : '-'}${fmtQ(Math.abs(dq))} ${C})`;
@@ -343,8 +373,9 @@ function refresh() {
 
   const d = computeDepth(); let ib = 0;
   if (d) {
-    ib = setRatio('bk05', d.b05, d.a05, 'bid', 'ask', '买盘 ' + fmtUsd(d.b05), '卖盘 ' + fmtUsd(d.a05));
-    setRatio('bk1', d.b1, d.a1, 'bid', 'ask', '买盘 ' + fmtUsd(d.b1), '卖盘 ' + fmtUsd(d.a1));
+    const cv = (r) => d.cover < r ? `仅覆盖±${(d.cover * 100).toFixed(2)}%` : ''; // 如 Coinbase 公共频道只给前 50 档
+    ib = setRatio('bk05', d.b05, d.a05, 'bid', 'ask', '买盘 ' + fmtUsd(d.b05), '卖盘 ' + fmtUsd(d.a05), cv(0.0049));
+    setRatio('bk1', d.b1, d.a1, 'bid', 'ask', '买盘 ' + fmtUsd(d.b1), '卖盘 ' + fmtUsd(d.a1), cv(0.0099));
     $('bb').textContent = fmtP(d.bb); $('ba').textContent = fmtP(d.ba); $('spr').textContent = (d.ba - d.bb).toFixed(2);
   }
   drawDepth(d); drawFlow();
@@ -374,7 +405,7 @@ function refresh() {
   const rt = (v) => { const b = Math.round((v + 1) * 50); return `<b><span class="c-blue">${b}</span>:<span class="c-red">${100 - b}</span></b>`; };
   const bi = (x) => `<span class="bi">${x}</span>`;
   $('basis').innerHTML = '战况依据：' + [
-    `10秒 ${pc(ch10)}`, `1分钟 ${pc(ch60)}`,
+    `10秒 ${pc(ch10)}`, `1分钟${cov < 60 ? `(仅${cov}秒)` : ''} ${pc(ch60)}`,
     `最新 ${S.tickDir > 0 ? '<b class="c-blue">↑</b>' : S.tickDir < 0 ? '<b class="c-red">↓</b>' : '–'}`,
     `吃单买:卖 ${rt(i60)}`, `挂单买:卖 ${rt(ib)}`].map(bi).join(' · ');
   const s = smoothS, blueShare = 0.5 + 0.5 * s;
