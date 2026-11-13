@@ -29,7 +29,7 @@
 <!-- 网页字体异步加载，不阻塞渲染；加载失败时使用系统字体 -->
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Ma+Shan+Zheng&family=JetBrains+Mono:wght@500;700;800&display=swap" media="print" onload="this.media='all'" />
 <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Ma+Shan+Zheng&family=JetBrains+Mono:wght@500;700;800&display=swap" /></noscript>
-<link rel="stylesheet" href="style.css?v=313eaba6" />
+<link rel="stylesheet" href="style.css?v=dd964b07" />
 </head>
 <body>
 <!-- 开场 -->
@@ -41,6 +41,8 @@
     <div class="intro-sub">多 空 战 场</div>
     <div class="intro-bar"><i id="introBar"></i></div>
     <div class="intro-msg" id="introMsg">集结部队中…</div>
+    <button class="intro-go" id="introGo" type="button">⚔️ 点击进入战场 🔊</button>
+    <div class="intro-hint">实时行情驱动 · 战鼓随多空节奏变化</div>
   </div>
 </div>
 
@@ -75,6 +77,7 @@
       <option value="okx">OKX</option>
       <option value="coinbase">Coinbase</option>
     </select>
+    <button class="music-ind" id="musicInd" type="button" aria-live="polite">♪ 配乐</button>
     <div class="audio-wrap">
       <button id="audioBtn" class="icon-btn" title="战争配乐 / 音效" aria-label="战争配乐与音效">🔇</button>
       <div class="audio-pop" id="audioPop" hidden>
@@ -82,7 +85,7 @@
         <label class="sw-row"><span>🎵 音乐</span><input type="checkbox" id="musicTog" /><i></i></label>
         <label class="sw-row"><span>💥 音效</span><input type="checkbox" id="sfxTog" /><i></i></label>
         <label class="vol-row"><span>🔊 音量</span><input type="range" id="volRange" min="0" max="100" value="70" /></label>
-        <div class="ap-note">太鼓 + 铜管实时合成：行情越热鼓点越快；蓝军推进旋律上行，红军压制旋律下行；总攻、胜利、巨鲸各有专属音效。切到后台自动暂停。</div>
+        <div class="ap-note">太鼓 + 铜管实时合成，全部由行情驱动：成交越快鼓点越快（BPM）；价格每跳一下弹一个音，涨则上行、跌则下行；1 分钟涨跌决定明暗调；每笔大单一声炮响；总攻、胜利、巨鲸各有专属音效。切到后台自动暂停。</div>
       </div>
     </div>
     <a class="icon-btn x-btn" href="https://x.com/0xVeryBigOrange" target="_blank" rel="noopener" title="关注 @0xVeryBigOrange" aria-label="X / Twitter">
@@ -192,6 +195,6 @@
   </div>
   <p class="disclaimer">数据来自 Binance / OKX / Coinbase 公共行情（无需 API Key），仅供娱乐参考，不构成投资建议 · 蓝 = 多 / 买方，红 = 空 / 卖方</p>
 </footer>
-<script type="module" src="js/app.js?v=313eaba6"></script>
+<script type="module" src="js/app.js?v=dd964b07"></script>
 </body>
 </html>

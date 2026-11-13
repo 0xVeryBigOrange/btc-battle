@@ -26,6 +26,13 @@ a{color:inherit;text-decoration:none}
 /* ---------- 开场 ---------- */
 .intro{animation:introFail .6s 9s forwards;position:fixed;inset:0;z-index:100;display:grid;place-items:center;background:#04060d;transition:opacity .7s ease,visibility .7s;overflow:hidden}
 .intro.done{opacity:0;visibility:hidden}
+.intro.js{animation:none}
+.intro-go{display:none;margin:22px auto 0;padding:16px 34px;border:0;border-radius:999px;cursor:pointer;font:800 clamp(17px,2.4vw,22px)/1 var(--cn-disp),var(--sans);letter-spacing:.08em;color:#fff;
+  background:linear-gradient(90deg,#2563eb,#7c3aed 50%,#dc2626);box-shadow:0 0 0 2px rgba(253,230,138,.55),0 10px 40px rgba(124,58,237,.45),0 0 60px rgba(239,68,68,.25);animation:goPulse 1.4s ease-in-out infinite}
+.intro-go:hover{filter:brightness(1.15);transform:translateY(-2px)}
+.intro-hint{display:none;margin-top:12px;font-size:12px;color:var(--mut);letter-spacing:.15em}
+.intro.ready{cursor:pointer}.intro.ready .intro-go,.intro.ready .intro-hint{display:block}.intro.ready .intro-bar{display:none}.intro.ready .intro-msg{margin-top:26px;color:#fde68a}
+@keyframes goPulse{50%{box-shadow:0 0 0 6px rgba(253,230,138,.25),0 10px 50px rgba(124,58,237,.6),0 0 80px rgba(239,68,68,.4);transform:scale(1.04)}}
 @keyframes introFail{to{opacity:0;visibility:hidden}}
 .intro-glow{position:absolute;width:70vmax;height:70vmax;border-radius:50%;filter:blur(80px);opacity:.35}
 .intro-glow.b{background:#2563eb;left:-40vmax;animation:introL 2s ease-out forwards}
@@ -218,6 +225,12 @@ canvas.depth{height:120px}
 
 /* ---------- 响应式 ---------- */
 .audio-wrap{position:relative}
+.music-ind{font:600 12px/1 var(--sans);color:#fde68a;background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.25);border-radius:999px;padding:7px 10px;cursor:pointer;white-space:nowrap;font-variant-numeric:tabular-nums}
+.music-ind.blue{color:#93c5fd;border-color:rgba(59,130,246,.45);background:rgba(59,130,246,.1)}
+.music-ind.red{color:#fca5a5;border-color:rgba(239,68,68,.45);background:rgba(239,68,68,.1)}
+.music-ind.off{color:var(--mut);border-color:var(--line);background:none}
+.music-ind.locked{color:#111;background:#fbbf24;border-color:#fbbf24;animation:indPulse 1.1s ease-in-out infinite}
+@keyframes indPulse{50%{box-shadow:0 0 0 5px rgba(251,191,36,.3);transform:scale(1.05)}}
 #audioBtn.on{border-color:rgba(251,191,36,.55);background:rgba(251,191,36,.14);box-shadow:0 0 14px rgba(251,191,36,.35);animation:beat 1s ease-in-out infinite}
 #audioBtn.pending{box-shadow:0 0 0 2px rgba(251,191,36,.45)}
 @keyframes beat{50%{transform:scale(1.08)}}
@@ -237,6 +250,8 @@ canvas.depth{height:120px}
   .topbar{grid-template-columns:auto auto;grid-template-areas:"brand controls" "tabs tabs"}
   .brand-wrap{grid-area:brand}.controls{grid-area:controls}.coin-tabs{grid-area:tabs;justify-self:stretch}
   .coin-tabs button{flex:1;justify-content:center}
+  .music-ind{position:fixed;right:12px;bottom:calc(12px + env(safe-area-inset-bottom));z-index:70;padding:9px 13px;font-size:12.5px;background-color:rgba(10,14,28,.92);box-shadow:0 8px 24px rgba(0,0,0,.5)}
+  .music-ind.locked{background:#fbbf24}
 }
 @media (max-width:1000px){
   .layout{grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-areas:"price price" "battle battle" "taker book" "trades trades"}

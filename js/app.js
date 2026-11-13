@@ -1,6 +1,6 @@
-import { FeedManager, SOURCES, COINS, fetchMiniTickers } from './feeds.js?v=313eaba6';
-import { Battle, fmtUsd } from './battle.js?v=313eaba6';
-import { AudioController } from './music.js?v=313eaba6';
+import { FeedManager, SOURCES, COINS, fetchMiniTickers } from './feeds.js?v=dd964b07';
+import { Battle, fmtUsd } from './battle.js?v=dd964b07';
+import { AudioController } from './music.js?v=dd964b07';
 
 const $ = (id) => document.getElementById(id);
 const pad = (n) => String(n).padStart(2, '0');
@@ -21,13 +21,22 @@ const wan = (v) => v >= 1e4 ? +(v / 1e4).toFixed(1) + '万' : Math.round(v).toLo
 // ---------- 开场 ----------
 const intro = $('intro'), introBar = $('introBar'), introMsg = $('introMsg');
 const introStart = performance.now(); let introDone = false;
+intro.classList.add('js'); // JS 已接管：取消 CSS 兜底自动隐藏，改为“点击进入战场”
 function introStep(pct, msg) { if (introDone) return; introBar.style.width = pct + '%'; if (msg) introMsg.textContent = msg; }
 function finishIntro() {
   if (introDone) return;
   const wait = Math.max(0, 1900 - (performance.now() - introStart));
   introStep(100, '⚔️ 战斗开始！');
   introDone = true;
-  setTimeout(() => { intro.classList.add('done'); setTimeout(() => intro.remove(), 900); }, wait + 350);
+  setTimeout(() => {
+    // 浏览器已允许播放 / 用户关了声音 → 直接进入；否则显示“点击进入战场”按钮（点击即解锁音频）
+    if (!audio.locked) return closeIntro();
+    intro.classList.add('ready'); introMsg.textContent = '战鼓已备好 · 点击开战';
+  }, wait + 350);
+}
+function closeIntro() {
+  if (!intro.isConnected || intro.classList.contains('done')) return;
+  intro.classList.add('done'); setTimeout(() => intro.remove(), 900);
 }
 introStep(15, '集结部队中…');
 setTimeout(finishIntro, 7000); // 最长等待
@@ -41,12 +50,12 @@ window.__cw = () => S.dbg;
 // ---------- 状态 ----------
 const S = {
   src: null, last: 0, shownStr: '', open24h: 0, tradesThisSec: 0,
-  buckets: new Array(300).fill(null).map(() => ({ sec: 0, b: 0, s: 0, bu: 0, su: 0 })),
+  buckets: new Array(300).fill(null).map(() => ({ sec: 0, b: 0, s: 0, bu: 0, su: 0, n: 0 })),
   px: new Array(120).fill(null).map(() => ({ sec: 0, p: 0 })), tickDir: 0,
   book: null, threshold: 0, surge: null, surgeSince: 0, wonFor: null,
 };
 function resetStats() {
-  for (const b of S.buckets) { b.sec = 0; b.b = b.s = b.bu = b.su = 0; }
+  for (const b of S.buckets) { b.sec = 0; b.b = b.s = b.bu = b.su = b.n = 0; }
   for (const x of S.px) { x.sec = 0; x.p = 0; } S.tickDir = 0;
   S.book = null; S.last = 0; S.shownStr = ''; S.open24h = 0; S.hi = 0;
   S.surge = null; S.wonFor = null; smoothS = 0;
@@ -56,7 +65,7 @@ function resetStats() {
 }
 function bucket(sec) {
   const b = S.buckets[sec % 300];
-  if (b.sec !== sec) { b.sec = sec; b.b = b.s = b.bu = b.su = 0; }
+  if (b.sec !== sec) { b.sec = sec; b.b = b.s = b.bu = b.su = b.n = 0; }
   return b;
 }
 // N 秒涨跌幅（%）：用 N 秒前（或最早可用的）每秒收盘价
@@ -70,9 +79,9 @@ function priceChange(secs) {
   return 0;
 }
 function windowSum(secs) {
-  const now = Math.floor(Date.now() / 1000); let b = 0, s = 0, bu = 0, su = 0;
-  for (let i = 0; i < secs; i++) { const k = S.buckets[(now - i) % 300]; if (k.sec === now - i) { b += k.b; s += k.s; bu += k.bu; su += k.su; } }
-  return { b, s, bu, su };
+  const now = Math.floor(Date.now() / 1000); let b = 0, s = 0, bu = 0, su = 0, n = 0;
+  for (let i = 0; i < secs; i++) { const k = S.buckets[(now - i) % 300]; if (k.sec === now - i) { b += k.b; s += k.s; bu += k.bu; su += k.su; n += k.n; } }
+  return { b, s, bu, su, n };
 }
 
 // ---------- 成交合并 ----------
@@ -82,7 +91,8 @@ function onTrade(t) {
   S.tradesThisSec++;
   const sec = Math.floor(Date.now() / 1000), bk = bucket(sec), usd = t.price * t.qty;
   if (t.side === 'buy') { bk.b += t.qty; bk.bu += usd; } else { bk.s += t.qty; bk.su += usd; }
-  if (S.last && t.price !== S.last) S.tickDir = t.price > S.last ? 1 : -1;
+  bk.n++;
+  if (S.last && t.price !== S.last) { S.tickDir = t.price > S.last ? 1 : -1; audio.tick(S.tickDir); } // 价格每跳一下 → 旋律走一步
   S.last = t.price;
   const ph = S.px[sec % 120]; ph.sec = sec; ph.p = t.price; // 每秒最后成交价
   if (pend && pend.side === t.side && Math.abs(pend.ts - t.ts) <= 5) { pend.qty += t.qty; pend.usd += usd; pend.price = t.price; }
@@ -317,7 +327,7 @@ function showBanner(html, cls, ms = 2200, force = false) {
 battle.onWhale = (side, usd) => (audio.whale(side), showBanner(`🐋 ${side === 'blue' ? '蓝军' : '红军'}巨鲸空袭<small>${side === 'blue' ? '主动买入' : '主动卖出'} ${fmtUsd(usd)}</small>`, side, 2600, true));
 
 // ---------- 战力 & 刷新 ----------
-let smoothS = 0, musicI = 0.15;
+let smoothS = 0, musicI = 0.15, musicBpm = 80, musicMood = 0;
 const VICTORY_SEC = 20;
 function refresh() {
   const C = COINS[coin];
@@ -349,11 +359,17 @@ function refresh() {
   // 待机射击频率 ∝ 每方近 10 秒主动成交额
   const ref = cfg().th.shell * 4;
   battle.setActivity(w10.bu / ref, w10.su / ref);
-  // 配乐强度：成交活跃度 + 战力偏向 + 总攻
-  const act = Math.tanh((w10.bu + w10.su) / ref / 1.5);
-  musicI = musicI * 0.7 + Math.min(1, 0.12 + 0.38 * act + 0.5 * Math.abs(smoothS)) * 0.3;
-  audio.update({ intensity: S.surge ? Math.max(musicI, 0.85) : musicI, bias: smoothS, surge: S.surge });
-  S.dbg = { musicI, t: Date.now(), price: S.last, ch10, ch60, p10, p60, i10, i60, ib, raw, s: smoothS, front: battle.front, target: battle.frontTarget, actB: w10.bu / ref, actR: w10.su / ref };
+  // ===== 配乐参数（与战场同一套实时输入，无随机）=====
+  // 速度 ← 近 10 秒成交额 + 成交笔数；情绪 ← 价格涨跌方向（10 秒/1 分钟）为主；强度 ← 活跃度 + 战力偏向
+  const actUsd = Math.tanh((w10.bu + w10.su) / ref / 1.5);
+  const actN = Math.tanh(w10.n / 10 / (coin === 'eth' ? 8 : 15));
+  const act = 0.6 * actUsd + 0.4 * actN;
+  musicI = musicI * 0.7 + Math.min(1, 0.15 + 0.4 * act + 0.45 * Math.abs(smoothS)) * 0.3;
+  musicBpm = musicBpm * 0.75 + (70 + 56 * act + 14 * Math.abs(smoothS)) * 0.25;
+  musicMood = 0.7 * (0.5 * p10 + 0.5 * p60) + 0.3 * smoothS;
+  audio.update({ intensity: S.surge ? Math.max(musicI, 0.85) : musicI, bias: musicMood, surge: S.surge, bpm: S.surge ? Math.max(124, musicBpm) : musicBpm });
+  updateMusicInd();
+  S.dbg = { musicI, musicBpm, musicMood, t: Date.now(), price: S.last, ch10, ch60, p10, p60, i10, i60, ib, raw, s: smoothS, front: battle.front, target: battle.frontTarget, actB: w10.bu / ref, actR: w10.su / ref };
   const pc = (v) => `<b class="${v >= 0 ? 'c-blue' : 'c-red'}">${v >= 0 ? '+' : ''}${v.toFixed(3)}%</b>`;
   const rt = (v) => { const b = Math.round((v + 1) * 50); return `<b><span class="c-blue">${b}</span>:<span class="c-red">${100 - b}</span></b>`; };
   const bi = (x) => `<span class="bi">${x}</span>`;
@@ -392,31 +408,53 @@ function refresh() {
 }
 setInterval(refresh, 400);
 
-// ---------- 战争配乐 / 音效（默认关闭，浏览器需点击后才能发声） ----------
+// ---------- 战争配乐 / 音效（默认开启；浏览器禁止无点击自动播放，首次点击/触摸/按键即解锁） ----------
 const audio = new AudioController();
 window.__audio = audio; // 调试用
-const AP = Object.assign({ music: false, sfx: false, vol: 70 }, JSON.parse(localStorage.getItem('cw_audio') || '{}'));
-const audioBtn = $('audioBtn'), pop = $('audioPop');
+const AKEY = 'cw_audio2'; // v2：默认开启（忽略旧版“默认关闭”时存下的设置）
+const AP = Object.assign({ music: true, sfx: true, vol: 75 }, JSON.parse(localStorage.getItem(AKEY) || '{}'));
+const audioBtn = $('audioBtn'), pop = $('audioPop'), mInd = $('musicInd');
 $('musicTog').checked = AP.music; $('sfxTog').checked = AP.sfx; $('volRange').value = AP.vol;
-function applyAudio() {
-  localStorage.setItem('cw_audio', JSON.stringify(AP));
+function moodLabel() {
+  if (S.surge) return S.surge === 'blue' ? '蓝军总攻' : '红军总攻';
+  return musicMood > 0.15 ? '蓝军上扬' : musicMood < -0.15 ? '红军下压' : '两军对峙';
+}
+function updateMusicInd() {
+  const want = AP.music || AP.sfx, locked = audio.locked;
+  audioBtn.textContent = !want ? '🔇' : AP.music ? '🎵' : '🔊';
+  audioBtn.classList.toggle('on', want && audio.running);
+  audioBtn.classList.toggle('pending', locked);
+  mInd.className = 'music-ind' + (locked ? ' locked' : !want ? ' off' : '') + (!locked && want ? ' ' + (S.surge || (musicMood > 0.15 ? 'blue' : musicMood < -0.15 ? 'red' : '')) : '');
+  mInd.textContent = locked ? '🔊 点击开启战歌' : !want ? '配乐已关' : AP.music ? `♪ ${audio.bpm()} BPM · ${moodLabel()}` : `💥 音效 · ${moodLabel()}`;
+}
+function saveAudio() {
+  localStorage.setItem(AKEY, JSON.stringify(AP));
   audio.apply({ music: AP.music, sfx: AP.sfx, volume: AP.vol / 100 });
-  audioBtn.classList.toggle('on', AP.music || AP.sfx);
-  audioBtn.classList.remove('pending');
-  audioBtn.textContent = AP.music ? '🎵' : AP.sfx ? '🔊' : '🔇';
+  if ((AP.music || AP.sfx) && !audio.running) audio.unlock().then(updateMusicInd); // 开关本身就是一次点击
+  updateMusicInd();
 }
-audioBtn.textContent = AP.music ? '🎵' : AP.sfx ? '🔊' : '🔇';
-// 上次开着音乐：等用户第一次点击页面时自动恢复（浏览器禁止自动播放）
-if (AP.music || AP.sfx) {
-  audioBtn.classList.add('pending'); audioBtn.title = '点击页面任意处恢复配乐';
-  const resume = () => { applyAudio(); document.removeEventListener('pointerdown', resume, true); document.removeEventListener('keydown', resume, true); };
-  document.addEventListener('pointerdown', resume, true); document.addEventListener('keydown', resume, true);
+audio.onstate = updateMusicInd;
+audio.apply({ music: AP.music, sfx: AP.sfx, volume: AP.vol / 100 });
+// 任意首次交互即解锁（iOS 需在手势回调里同步 resume）
+const GEST = ['pointerdown', 'touchstart', 'touchend', 'mousedown', 'keydown', 'click'];
+function onGesture() {
+  if (!(AP.music || AP.sfx)) return;
+  if (!audio.running) audio.unlock().then((ok) => { updateMusicInd(); if (ok) GEST.forEach(ev => document.removeEventListener(ev, onGesture, true)); });
+  else GEST.forEach(ev => document.removeEventListener(ev, onGesture, true));
 }
+GEST.forEach(ev => document.addEventListener(ev, onGesture, true));
+if (AP.music || AP.sfx) audio.tryAutoStart().then(updateMusicInd);
+// 开场“点击进入战场”
+$('introGo').onclick = (e) => { e.stopPropagation(); onGesture(); closeIntro(); };
+intro.addEventListener('click', () => { if (intro.classList.contains('ready')) { onGesture(); closeIntro(); } });
+document.addEventListener('keydown', (e) => { if (intro.classList.contains('ready') && (e.key === 'Enter' || e.key === ' ')) closeIntro(); });
+mInd.onclick = (e) => { e.stopPropagation(); if (audio.locked) onGesture(); else pop.hidden = !pop.hidden; };
 audioBtn.onclick = (e) => { e.stopPropagation(); pop.hidden = !pop.hidden; };
 document.addEventListener('click', (e) => { if (!pop.hidden && !e.target.closest('.audio-wrap')) pop.hidden = true; });
-$('musicTog').onchange = (e) => { AP.music = e.target.checked; applyAudio(); };
-$('sfxTog').onchange = (e) => { AP.sfx = e.target.checked; applyAudio(); };
-$('volRange').oninput = (e) => { AP.vol = +e.target.value; applyAudio(); };
+$('musicTog').onchange = (e) => { AP.music = e.target.checked; saveAudio(); };
+$('sfxTog').onchange = (e) => { AP.sfx = e.target.checked; saveAudio(); };
+$('volRange').oninput = (e) => { AP.vol = +e.target.value; saveAudio(); };
+updateMusicInd();
 
 // ---------- 启动 ----------
 setCoin(coin, true);

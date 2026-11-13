@@ -26,8 +26,9 @@ const OSTINATO = [0, 0, 12, 0, 0, 0, 12, 7]; // 8 分音符弦乐顿弓
 export class WarMusic {
   constructor(ctx) {
     this.ctx = ctx;
-    this.state = { intensity: 0.15, bias: 0, surge: null };
-    this.volume = 0.7; this.musicOn = false; this.sfxOn = false;
+    this.state = { intensity: 0.15, bias: 0, surge: null, bpm: 80 };
+    this.tickQ = 0; this.deg = 7; // 价格逐笔涨跌 → 旋律音阶位置
+    this.volume = 0.75; this.musicOn = false; this.sfxOn = false;
     this._build();
     this.step = 0; this.bar = 0; this.nextT = 0; this.stepDur = 0.2;
   }
@@ -40,6 +41,7 @@ export class WarMusic {
     this.comp.attack.value = 0.008; this.comp.release.value = 0.25;
     this.master = c.createGain(); this.master.gain.value = this.volume * 0.9;
     this.comp.connect(this.master).connect(c.destination);
+    this.an = c.createAnalyser(); this.an.fftSize = 1024; this.master.connect(this.an); this._abuf = new Float32Array(1024);
     this.mix = c.createGain(); this.mix.connect(this.comp);
     this.music = c.createGain(); this.music.gain.value = 0; this.music.connect(this.mix);
     this.sfx = c.createGain(); this.sfx.gain.value = 0; this.sfx.connect(this.mix);
@@ -85,14 +87,18 @@ export class WarMusic {
     g.gain.exponentialRampToValueAtTime(0.9 * vel, t + 0.006); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.1);
     o.connect(g); o.start(t); o.stop(t + 1.2);
     // 鼓皮击打噪声
-    const nz = this._noiseSrc(t, 0.12), lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1100;
+    const nz = this._noiseSrc(t, 0.12), lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2200;
     const ng = c.createGain(); ng.gain.setValueAtTime(0.5 * vel, t); ng.gain.exponentialRampToValueAtTime(0.0001, t + 0.1);
     nz.connect(lp).connect(ng);
     // 共鸣泛音
     const o2 = c.createOscillator(); o2.type = 'triangle'; o2.frequency.setValueAtTime(95, t); o2.frequency.exponentialRampToValueAtTime(70, t + 0.4);
     const g2 = c.createGain(); g2.gain.setValueAtTime(0.0001, t); g2.gain.exponentialRampToValueAtTime(0.18 * vel, t + 0.01); g2.gain.exponentialRampToValueAtTime(0.0001, t + 0.6);
     o2.connect(g2); o2.start(t); o2.stop(t + 0.7);
-    this._out(g, bus, 0.35); this._out(ng, bus, 0.3); this._out(g2, bus, 0.3);
+    // 中频鼓腔（手机/笔记本扬声器也能听到）
+    const o3 = c.createOscillator(); o3.type = 'triangle'; o3.frequency.setValueAtTime(240 * big, t); o3.frequency.exponentialRampToValueAtTime(120, t + 0.12);
+    const g3 = c.createGain(); g3.gain.setValueAtTime(0.0001, t); g3.gain.exponentialRampToValueAtTime(0.32 * vel, t + 0.004); g3.gain.exponentialRampToValueAtTime(0.0001, t + 0.28);
+    o3.connect(g3); o3.start(t); o3.stop(t + 0.32);
+    this._out(g, bus, 0.35); this._out(ng, bus, 0.3); this._out(g2, bus, 0.3); this._out(g3, bus, 0.25);
   }
   tom(t, vel = 1) {
     const c = this.ctx;
@@ -120,7 +126,7 @@ export class WarMusic {
   // 弦乐铺底（多锯齿波失谐 + 低通）
   pad(t, notes, dur, bright) {
     const c = this.ctx, lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 500 + 1600 * bright; lp.Q.value = 0.5;
-    const g = c.createGain(); g.gain.setValueAtTime(0.0001, t); const pv = 0.025 + 0.03 * bright; g.gain.linearRampToValueAtTime(pv, t + 0.5);
+    const g = c.createGain(); g.gain.setValueAtTime(0.0001, t); const pv = 0.045 + 0.035 * bright; g.gain.linearRampToValueAtTime(pv, t + 0.5);
     g.gain.setValueAtTime(pv, t + dur - 0.2); g.gain.linearRampToValueAtTime(0.0001, t + dur + 0.9);
     lp.connect(g);
     for (const m of notes) for (const det of [-9, 0, 8]) {
@@ -130,11 +136,11 @@ export class WarMusic {
     this._out(g, 'music', 0.6);
   }
   drone(t, root, dur, amt) {
-    const c = this.ctx, lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 180 + 120 * amt;
+    const c = this.ctx, lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 320 + 380 * amt;
     const g = c.createGain(); g.gain.setValueAtTime(0.0001, t); const dv = 0.07 + 0.08 * amt; g.gain.linearRampToValueAtTime(dv, t + 0.3);
     g.gain.setValueAtTime(dv, t + dur - 0.1); g.gain.linearRampToValueAtTime(0.0001, t + dur + 0.5);
     lp.connect(g);
-    for (const [type, m, det] of [['sawtooth', root - 12, -5], ['sawtooth', root - 12, 6], ['sine', root - 24, 0]]) {
+    for (const [type, m, det] of [['sawtooth', root - 12, -5], ['sawtooth', root - 12, 6], ['sine', root - 24, 0], ['sawtooth', root, 0]]) {
       const o = c.createOscillator(); o.type = type; o.frequency.value = mtof(m); o.detune.value = det; o.connect(lp); o.start(t); o.stop(t + dur + 0.6);
     }
     this._out(g, 'music', 0.15);
@@ -164,6 +170,19 @@ export class WarMusic {
     }
     this._out(g, bus, 0.45);
   }
+
+  // 拨弦（价格逐笔涨跌旋律）
+  pluck(t, m, vel = 1) {
+    const c = this.ctx, lp = c.createBiquadFilter(); lp.type = 'lowpass';
+    lp.frequency.setValueAtTime(3200, t); lp.frequency.exponentialRampToValueAtTime(600, t + 0.3);
+    const g = c.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.12 * vel, t + 0.005); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.45);
+    lp.connect(g);
+    for (const [type, det] of [['triangle', 0], ['sawtooth', 5]]) { const o = c.createOscillator(); o.type = type; o.frequency.value = mtof(m); o.detune.value = det; o.connect(lp); o.start(t); o.stop(t + 0.5); }
+    this._out(g, 'music', 0.4);
+  }
+  /** 实时成交价跳动：+1 上涨 / -1 下跌，按 8 分音符量化播放 */
+  priceTick(dir) { this.tickQ = clamp(this.tickQ + dir, -4, 4); }
+  level() { this.an.getFloatTimeDomainData(this._abuf); let e = 0; for (const v of this._abuf) e += v * v; return Math.sqrt(e / this._abuf.length); }
 
   // ---------- 特殊事件 ----------
   whale(t = this.ctx.currentTime + 0.02, side = 'blue') { // 巨鲸空袭爆炸
@@ -207,7 +226,7 @@ export class WarMusic {
   _bar(t) {
     const s = this.state, I = clamp(s.intensity, 0, 1);
     const L = s.surge ? 3 : Math.min(3, Math.floor(I * 3.2));
-    const bpm = s.surge ? 124 : 66 + 52 * I;
+    const bpm = s.surge ? Math.max(124, s.bpm || 0) : clamp(s.bpm || (66 + 52 * I), 60, 140);
     this.stepDur = 60 / bpm / 4;
     const dur = this.stepDur * 16;
     const side = s.bias > 0.15 ? 'blue' : s.bias < -0.15 ? 'red' : 'neutral';
@@ -238,6 +257,17 @@ export class WarMusic {
     if (L >= 1 && i % 2 === 0) this.stab(t, chord[0] + OSTINATO[i / 2] , 0.6 + 0.4 * I);
     if (L >= 2 && i % 2 === 1) this.shaker(t, 0.6 + 0.4 * I);
     if (L >= 3 && i % 2 === 1) this.stab(t, chord[2] + 12, 0.45);
+    if (L === 0 && i % 4 === 0) this.stab(t, chord[0] + (i === 8 ? 7 : 0), 0.5); // 安静时的弦乐脉搏
+    // 价格每跳一下就弹一个音：上涨音阶上行、下跌下行（D 小调）
+    if (i % 2 === 0 && this.tickQ !== 0) {
+      const d = Math.sign(this.tickQ); this.tickQ -= d;
+      this.deg = clamp(this.deg + d, 0, 14);
+      const SC = [0, 2, 3, 5, 7, 8, 10], oct = Math.floor(this.deg / 7), m = 62 + 12 * oct + SC[this.deg % 7] - 12;
+      this.pluck(t, m, 0.6 + 0.4 * I);
+      if (this.deg === 0 || this.deg === 14) this.deg = 7;
+    }
+    // 每拍刷新速度（行情变化 1 拍内就能听出来）
+    if (i % 4 === 3 && !this.state.surge) this.stepDur = 60 / clamp(this.state.bpm || 80, 60, 140) / 4;
   }
   /** 调度到 tEnd 为止的所有音符 */
   scheduleUntil(tEnd) {
@@ -261,38 +291,64 @@ export class WarMusic {
 }
 
 /** 浏览器端控制器：AudioContext 生命周期、iOS 解锁、后台暂停 */
+function silentWavURL() { // 0.25 秒静音 WAV（iOS：让网页音频走“媒体”通道，静音键打开时也能出声）
+  const n = 2000, b = new ArrayBuffer(44 + n), v = new DataView(b), w = (o, str) => [...str].forEach((ch, i) => v.setUint8(o + i, ch.charCodeAt(0)));
+  w(0, 'RIFF'); v.setUint32(4, 36 + n, true); w(8, 'WAVEfmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, 8000, true); v.setUint32(28, 8000, true); v.setUint16(32, 1, true); v.setUint16(34, 8, true); w(36, 'data'); v.setUint32(40, n, true);
+  for (let i = 0; i < n; i++) v.setUint8(44 + i, 128);
+  return URL.createObjectURL(new Blob([b], { type: 'audio/wav' }));
+}
+const IOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 export class AudioController {
-  constructor() { this.ctx = null; this.engine = null; this.timer = null; }
+  constructor() { this.ctx = null; this.engine = null; this.timer = null; this.onstate = null; this.want = { music: false, sfx: false, volume: 0.75 }; }
   _ensure() {
     if (this.ctx) return;
     const AC = window.AudioContext || window.webkitAudioContext;
     this.ctx = new AC({ latencyHint: 'playback' });
     this.engine = new WarMusic(this.ctx);
-    // iOS 解锁：在点击手势中播放一段静音
-    const b = this.ctx.createBuffer(1, 1, 22050), s = this.ctx.createBufferSource(); s.buffer = b; s.connect(this.ctx.destination); s.start(0);
+    this.ctx.onstatechange = () => { if (this.running) this.engine.nextT = 0; this.onstate && this.onstate(this.ctx.state); };
     document.addEventListener('visibilitychange', () => this._vis());
+  }
+  get running() { return !!this.ctx && this.ctx.state === 'running'; }
+  get locked() { return (this.want.music || this.want.sfx) && !this.running && !document.hidden; }
+  /** 在用户手势（点击/触摸/按键）回调里同步调用 */
+  unlock() {
+    this._ensure();
+    try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) {}
+    try { const s = this.ctx.createBufferSource(); s.buffer = this.ctx.createBuffer(1, 1, 22050); s.connect(this.ctx.destination); s.start(0); } catch (e) {}
+    if (IOS) { try { if (!this.el) { this.el = new Audio(silentWavURL()); this.el.loop = true; this.el.setAttribute('playsinline', ''); } this.el.play().catch(() => {}); } catch (e) {} }
+    const p = this.ctx.resume();
+    this._apply();
+    return (p && p.then ? p : Promise.resolve()).then(() => this.running, () => false);
+  }
+  /** 页面加载时尝试直接开播（浏览器允许自动播放时有效） */
+  tryAutoStart() {
+    if (navigator.getAutoplayPolicy && navigator.getAutoplayPolicy('audiocontext') === 'disallowed') return Promise.resolve(false);
+    this._ensure(); this._apply();
+    return this.ctx.resume().then(() => this.running, () => false);
   }
   _vis() {
     if (!this.ctx) return;
-    if (document.hidden) this.ctx.suspend();
-    else if (this.engine.musicOn || this.engine.sfxOn) this.ctx.resume().then(() => { this.engine.nextT = this.ctx.currentTime + 0.1; });
+    if (document.hidden) { this.ctx.suspend(); if (this.el) this.el.pause(); }
+    else if (this.want.music || this.want.sfx) { this.ctx.resume(); if (this.el) this.el.play().catch(() => {}); }
   }
-  /** 必须在用户点击事件内调用 */
-  apply({ music, sfx, volume }) {
-    if (!music && !sfx && !this.ctx) return;
-    this._ensure();
-    if (this.ctx.state !== 'running' && !document.hidden) this.ctx.resume();
-    this.engine.setVolume(volume);
-    if (music !== this.engine.musicOn) this.engine.setMusic(music);
-    this.engine.setSfx(sfx);
-    if (music && !this.timer) this.timer = setInterval(() => { if (this.ctx.state === 'running') this.engine.scheduleUntil(this.ctx.currentTime + 0.35); }, 60);
+  apply(w) { Object.assign(this.want, w); if (this.ctx) this._apply(); if (this.ctx && !this.running && !document.hidden && (w.music || w.sfx)) this.ctx.resume().catch(() => {}); }
+  _apply() {
+    const { music, sfx, volume } = this.want, e = this.engine;
+    e.setVolume(volume);
+    if (music !== e.musicOn) e.setMusic(music);
+    e.setSfx(sfx);
+    if (music && !this.timer) this.timer = setInterval(() => { if (this.running) this.engine.scheduleUntil(this.ctx.currentTime + 0.35); }, 60);
     if (!music && this.timer) { clearInterval(this.timer); this.timer = null; }
     if (!music && !sfx) setTimeout(() => { if (!this.engine.musicOn && !this.engine.sfxOn) this.ctx.suspend(); }, 400);
   }
-  get on() { return !!(this.engine && (this.engine.musicOn || this.engine.sfxOn) && this.ctx.state === 'running'); }
+  get on() { return !!(this.engine && (this.engine.musicOn || this.engine.sfxOn) && this.running); }
+  level() { return this.engine ? this.engine.level() : 0; }
+  bpm() { return this.engine ? Math.round(60 / this.engine.stepDur / 4) : 0; }
   update(st) { if (this.engine) this.engine.setState(st); }
+  tick(dir) { if (this.engine && this.engine.musicOn && this.running) this.engine.priceTick(dir); }
   whale(side) { if (this.on) this.engine.whale(undefined, side); }
-  impact(usd, side) { if (this.engine && this.engine.sfxOn && this.ctx.state === 'running') this.engine.impact(usd, side); }
-  fanfare(side) { if (this.engine && this.engine.musicOn && this.ctx.state === 'running') this.engine.fanfare(side); }
-  surge(side) { if (this.engine && this.engine.musicOn && this.ctx.state === 'running') this.engine.surgeHit(side); }
+  impact(usd, side) { if (this.engine && this.engine.sfxOn && this.running) this.engine.impact(usd, side); }
+  fanfare(side) { if (this.engine && this.engine.musicOn && this.running) this.engine.fanfare(side); }
+  surge(side) { if (this.engine && this.engine.musicOn && this.running) this.engine.surgeHit(side); }
 }
