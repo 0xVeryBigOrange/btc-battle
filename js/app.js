@@ -1,5 +1,6 @@
-import { FeedManager, SOURCES, COINS, fetchMiniTickers } from './feeds.js?v=9964d7aa';
-import { Battle, fmtUsd } from './battle.js?v=9964d7aa';
+import { FeedManager, SOURCES, COINS, fetchMiniTickers } from './feeds.js?v=313eaba6';
+import { Battle, fmtUsd } from './battle.js?v=313eaba6';
+import { AudioController } from './music.js?v=313eaba6';
 
 const $ = (id) => document.getElementById(id);
 const pad = (n) => String(n).padStart(2, '0');
@@ -42,7 +43,7 @@ const S = {
   src: null, last: 0, shownStr: '', open24h: 0, tradesThisSec: 0,
   buckets: new Array(300).fill(null).map(() => ({ sec: 0, b: 0, s: 0, bu: 0, su: 0 })),
   px: new Array(120).fill(null).map(() => ({ sec: 0, p: 0 })), tickDir: 0,
-  book: null, threshold: 0, surge: null, surgeSince: 0, wonFor: null, sound: false,
+  book: null, threshold: 0, surge: null, surgeSince: 0, wonFor: null,
 };
 function resetStats() {
   for (const b of S.buckets) { b.sec = 0; b.b = b.s = b.bu = b.su = 0; }
@@ -90,7 +91,7 @@ function onTrade(t) {
 function onMergedTrade(t) {
   battle.fire(t.side, t.usd, t.qty);
   if (t.usd >= S.threshold) addTradeRow(t);
-  if (S.sound && t.usd >= cfg().th.shell) boom(t.usd);
+  if (t.usd >= cfg().th.shell) audio.impact(t.usd * 50000 / cfg().th.shell, t.side === 'buy' ? 'blue' : 'red');
 }
 function addTradeRow(t) {
   const ul = $('trades');
@@ -313,10 +314,10 @@ function showBanner(html, cls, ms = 2200, force = false) {
   void banner.offsetWidth; banner.classList.add('show');
   clearTimeout(bannerT); bannerT = setTimeout(() => banner.classList.remove('show'), ms);
 }
-battle.onWhale = (side, usd) => showBanner(`🐋 ${side === 'blue' ? '蓝军' : '红军'}巨鲸空袭<small>${side === 'blue' ? '主动买入' : '主动卖出'} ${fmtUsd(usd)}</small>`, side, 2600, true);
+battle.onWhale = (side, usd) => (audio.whale(side), showBanner(`🐋 ${side === 'blue' ? '蓝军' : '红军'}巨鲸空袭<small>${side === 'blue' ? '主动买入' : '主动卖出'} ${fmtUsd(usd)}</small>`, side, 2600, true));
 
 // ---------- 战力 & 刷新 ----------
-let smoothS = 0;
+let smoothS = 0, musicI = 0.15;
 const VICTORY_SEC = 20;
 function refresh() {
   const C = COINS[coin];
@@ -348,7 +349,11 @@ function refresh() {
   // 待机射击频率 ∝ 每方近 10 秒主动成交额
   const ref = cfg().th.shell * 4;
   battle.setActivity(w10.bu / ref, w10.su / ref);
-  S.dbg = { t: Date.now(), price: S.last, ch10, ch60, p10, p60, i10, i60, ib, raw, s: smoothS, front: battle.front, target: battle.frontTarget, actB: w10.bu / ref, actR: w10.su / ref };
+  // 配乐强度：成交活跃度 + 战力偏向 + 总攻
+  const act = Math.tanh((w10.bu + w10.su) / ref / 1.5);
+  musicI = musicI * 0.7 + Math.min(1, 0.12 + 0.38 * act + 0.5 * Math.abs(smoothS)) * 0.3;
+  audio.update({ intensity: S.surge ? Math.max(musicI, 0.85) : musicI, bias: smoothS, surge: S.surge });
+  S.dbg = { musicI, t: Date.now(), price: S.last, ch10, ch60, p10, p60, i10, i60, ib, raw, s: smoothS, front: battle.front, target: battle.frontTarget, actB: w10.bu / ref, actR: w10.su / ref };
   const pc = (v) => `<b class="${v >= 0 ? 'c-blue' : 'c-red'}">${v >= 0 ? '+' : ''}${v.toFixed(3)}%</b>`;
   const rt = (v) => { const b = Math.round((v + 1) * 50); return `<b><span class="c-blue">${b}</span>:<span class="c-red">${100 - b}</span></b>`; };
   const bi = (x) => `<span class="bi">${x}</span>`;
@@ -369,12 +374,13 @@ function refresh() {
   else if (surge === 'blue' && s < 0.2) surge = null; else if (surge === 'red' && s > -0.2) surge = null;
   if (surge !== S.surge) {
     S.surge = surge; S.surgeSince = Date.now(); S.wonFor = null; battle.setSurge(surge);
+    if (surge) audio.surge(surge);
     if (surge) showBanner(surge === 'blue' ? '⚔️ 蓝军发起总攻！<small>多头主动出击</small>' : '⚔️ 红军发起总攻！<small>空头主动出击</small>', surge, 2400, true);
   }
   // 胜利：持续压制
   const held = surge ? (Date.now() - S.surgeSince) / 1000 : 0;
   if (surge && held >= VICTORY_SEC && S.wonFor !== surge) {
-    S.wonFor = surge; battle.celebrate(surge);
+    S.wonFor = surge; battle.celebrate(surge); audio.fanfare(surge);
     showBanner(surge === 'blue' ? '🏆 蓝军大获全胜！<small>多头压制 ' + VICTORY_SEC + ' 秒 · 红军溃退</small>' : '🏆 红军大获全胜！<small>空头压制 ' + VICTORY_SEC + ' 秒 · 蓝军溃退</small>', surge + ' victory', 3200, true);
   }
   $('streak').textContent = surge ? `${surge === 'blue' ? '蓝军' : '红军'}已压制 ${Math.floor(held)} 秒${held < VICTORY_SEC ? '' : ' 🏆'}` : '';
@@ -386,23 +392,31 @@ function refresh() {
 }
 setInterval(refresh, 400);
 
-// ---------- 音效（默认关闭） ----------
-let actx;
-$('soundBtn').onclick = () => {
-  S.sound = !S.sound; $('soundBtn').textContent = S.sound ? '🔊' : '🔇';
-  if (S.sound && !actx) actx = new (window.AudioContext || window.webkitAudioContext)();
-};
-let lastBoom = 0;
-function boom(usd) {
-  if (!actx) return; const now = actx.currentTime; if (now - lastBoom < 0.08) return; lastBoom = now;
-  const k = Math.min(Math.log10(usd / cfg().th.shell) / 2, 1.2), len = 0.25 + k * 0.6;
-  const buf = actx.createBuffer(1, actx.sampleRate * len, actx.sampleRate), dd = buf.getChannelData(0);
-  for (let i = 0; i < dd.length; i++) dd[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / dd.length, 2.5);
-  const src = actx.createBufferSource(); src.buffer = buf;
-  const lp = actx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 500 - k * 250;
-  const g = actx.createGain(); g.gain.value = 0.25 + k * 0.35;
-  src.connect(lp).connect(g).connect(actx.destination); src.start();
+// ---------- 战争配乐 / 音效（默认关闭，浏览器需点击后才能发声） ----------
+const audio = new AudioController();
+window.__audio = audio; // 调试用
+const AP = Object.assign({ music: false, sfx: false, vol: 70 }, JSON.parse(localStorage.getItem('cw_audio') || '{}'));
+const audioBtn = $('audioBtn'), pop = $('audioPop');
+$('musicTog').checked = AP.music; $('sfxTog').checked = AP.sfx; $('volRange').value = AP.vol;
+function applyAudio() {
+  localStorage.setItem('cw_audio', JSON.stringify(AP));
+  audio.apply({ music: AP.music, sfx: AP.sfx, volume: AP.vol / 100 });
+  audioBtn.classList.toggle('on', AP.music || AP.sfx);
+  audioBtn.classList.remove('pending');
+  audioBtn.textContent = AP.music ? '🎵' : AP.sfx ? '🔊' : '🔇';
 }
+audioBtn.textContent = AP.music ? '🎵' : AP.sfx ? '🔊' : '🔇';
+// 上次开着音乐：等用户第一次点击页面时自动恢复（浏览器禁止自动播放）
+if (AP.music || AP.sfx) {
+  audioBtn.classList.add('pending'); audioBtn.title = '点击页面任意处恢复配乐';
+  const resume = () => { applyAudio(); document.removeEventListener('pointerdown', resume, true); document.removeEventListener('keydown', resume, true); };
+  document.addEventListener('pointerdown', resume, true); document.addEventListener('keydown', resume, true);
+}
+audioBtn.onclick = (e) => { e.stopPropagation(); pop.hidden = !pop.hidden; };
+document.addEventListener('click', (e) => { if (!pop.hidden && !e.target.closest('.audio-wrap')) pop.hidden = true; });
+$('musicTog').onchange = (e) => { AP.music = e.target.checked; applyAudio(); };
+$('sfxTog').onchange = (e) => { AP.sfx = e.target.checked; applyAudio(); };
+$('volRange').oninput = (e) => { AP.vol = +e.target.value; applyAudio(); };
 
 // ---------- 启动 ----------
 setCoin(coin, true);

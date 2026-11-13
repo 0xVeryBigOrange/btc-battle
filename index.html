@@ -29,7 +29,7 @@
 <!-- 网页字体异步加载，不阻塞渲染；加载失败时使用系统字体 -->
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Ma+Shan+Zheng&family=JetBrains+Mono:wght@500;700;800&display=swap" media="print" onload="this.media='all'" />
 <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Ma+Shan+Zheng&family=JetBrains+Mono:wght@500;700;800&display=swap" /></noscript>
-<link rel="stylesheet" href="style.css?v=9964d7aa" />
+<link rel="stylesheet" href="style.css?v=313eaba6" />
 </head>
 <body>
 <!-- 开场 -->
@@ -75,7 +75,16 @@
       <option value="okx">OKX</option>
       <option value="coinbase">Coinbase</option>
     </select>
-    <button id="soundBtn" class="icon-btn" title="音效" aria-label="音效">🔇</button>
+    <div class="audio-wrap">
+      <button id="audioBtn" class="icon-btn" title="战争配乐 / 音效" aria-label="战争配乐与音效">🔇</button>
+      <div class="audio-pop" id="audioPop" hidden>
+        <div class="ap-title">⚔️ 战争配乐 <small>随实时战况变化</small></div>
+        <label class="sw-row"><span>🎵 音乐</span><input type="checkbox" id="musicTog" /><i></i></label>
+        <label class="sw-row"><span>💥 音效</span><input type="checkbox" id="sfxTog" /><i></i></label>
+        <label class="vol-row"><span>🔊 音量</span><input type="range" id="volRange" min="0" max="100" value="70" /></label>
+        <div class="ap-note">太鼓 + 铜管实时合成：行情越热鼓点越快；蓝军推进旋律上行，红军压制旋律下行；总攻、胜利、巨鲸各有专属音效。切到后台自动暂停。</div>
+      </div>
+    </div>
     <a class="icon-btn x-btn" href="https://x.com/0xVeryBigOrange" target="_blank" rel="noopener" title="关注 @0xVeryBigOrange" aria-label="X / Twitter">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
     </a>
@@ -183,6 +192,6 @@
   </div>
   <p class="disclaimer">数据来自 Binance / OKX / Coinbase 公共行情（无需 API Key），仅供娱乐参考，不构成投资建议 · 蓝 = 多 / 买方，红 = 空 / 卖方</p>
 </footer>
-<script type="module" src="js/app.js?v=9964d7aa"></script>
+<script type="module" src="js/app.js?v=313eaba6"></script>
 </body>
 </html>

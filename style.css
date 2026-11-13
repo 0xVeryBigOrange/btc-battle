@@ -217,6 +217,22 @@ canvas.depth{height:120px}
 .disclaimer{color:var(--mut);font-size:11.5px;text-align:center;margin:14px 0 0}
 
 /* ---------- 响应式 ---------- */
+.audio-wrap{position:relative}
+#audioBtn.on{border-color:rgba(251,191,36,.55);background:rgba(251,191,36,.14);box-shadow:0 0 14px rgba(251,191,36,.35);animation:beat 1s ease-in-out infinite}
+#audioBtn.pending{box-shadow:0 0 0 2px rgba(251,191,36,.45)}
+@keyframes beat{50%{transform:scale(1.08)}}
+.audio-pop{position:absolute;right:0;top:calc(100% + 8px);z-index:60;width:250px;padding:14px;border-radius:14px;background:rgba(12,17,34,.97);border:1px solid var(--line2);box-shadow:0 18px 40px rgba(0,0,0,.6);animation:popin .2s ease-out}
+.audio-pop[hidden]{display:none}
+@keyframes popin{from{opacity:0;transform:translateY(-6px)}}
+.ap-title{font-weight:800;font-size:14px;margin-bottom:10px}.ap-title small{font-weight:400;color:var(--mut);font-size:11px;margin-left:4px}
+.sw-row,.vol-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;font-size:13px;cursor:pointer;border-top:1px solid var(--line)}
+.sw-row input{position:absolute;opacity:0;pointer-events:none}
+.sw-row i{position:relative;width:40px;height:22px;border-radius:999px;background:#1f2937;transition:background .2s;flex:none}
+.sw-row i::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#cbd5e1;transition:transform .2s}
+.sw-row input:checked+i{background:linear-gradient(90deg,#2563eb,#ef4444)}
+.sw-row input:checked+i::after{transform:translateX(18px);background:#fff}
+.vol-row input{flex:1;accent-color:#fbbf24}
+.ap-note{font-size:11px;color:var(--mut);line-height:1.6;margin-top:6px}
 @media (max-width:1100px){
   .topbar{grid-template-columns:auto auto;grid-template-areas:"brand controls" "tabs tabs"}
   .brand-wrap{grid-area:brand}.controls{grid-area:controls}.coin-tabs{grid-area:tabs;justify-self:stretch}
