@@ -98,7 +98,7 @@ export function loadTickers(force = false) {
       m.qvB = bt ? +bt.quoteVolume : 0; m.qvO = ot ? +ot.volCcy24h : 0;
       if (bt && +bt.lastPrice) { m.last = +bt.lastPrice; m.chg = +bt.openPrice ? (+bt.lastPrice / +bt.openPrice - 1) * 100 : 0; }
       else if (ot && +ot.last) { m.last = +ot.last; m.chg = +ot.open24h ? (+ot.last / +ot.open24h - 1) * 100 : 0; }
-      m.qv = m.qvB + m.qvO;
+      m.qv = m.qvB + m.qvO; m.qvP = m.binance ? m.qvB : m.qvO; // qvP：主数据源的成交额，用于定门槛（与直接打开链接时一致）
     }
     return universe;
   })();

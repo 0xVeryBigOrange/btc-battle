@@ -1,8 +1,8 @@
-import { FeedManager, SOURCES, fetchMiniTickers, fetchBinance1s, fetchBinanceAggTrades } from './feeds.js?v=e7466d44';
-import { PRESET, universe, loadUniverse, loadTickers, fetchQuoteVolume, thresholdsFor, search as searchCoins, topByVolume, recents, pushRecent, favorites, toggleFav, primarySource } from './markets.js?v=e7466d44';
-import { Battle } from './battle.js?v=e7466d44';
-import { t as T, lang, setLang, onLang, applyI18n, fmtUsd, fmtShort, fmtNum } from './i18n.js?v=e7466d44';
-import { AudioController } from './music.js?v=e7466d44';
+import { FeedManager, SOURCES, fetchMiniTickers, fetchBinance1s, fetchBinanceAggTrades } from './feeds.js?v=9af1a12f';
+import { PRESET, universe, loadUniverse, loadTickers, fetchQuoteVolume, thresholdsFor, search as searchCoins, topByVolume, recents, pushRecent, favorites, toggleFav, primarySource } from './markets.js?v=9af1a12f';
+import { Battle } from './battle.js?v=9af1a12f';
+import { t as T, lang, setLang, onLang, applyI18n, fmtUsd, fmtShort, fmtNum } from './i18n.js?v=9af1a12f';
+import { AudioController } from './music.js?v=9af1a12f';
 
 const $ = (id) => document.getElementById(id);
 const pad = (n) => String(n).padStart(2, '0');
@@ -218,7 +218,7 @@ const fm = new FeedManager({
     $('pair').textContent = `${M.base}/${SOURCES[src].quote} · ${SOURCES[src].name}`;
   },
   onTrade,
-  onTicker(t) { if (t.qv) M.qv = t.qv; S.open24h = t.open24h; S.hi = t.high24h; S.lo = t.low24h; S.vol = t.vol24h; if (!S.last) S.last = t.last; },
+  onTicker(t) { S.open24h = t.open24h; S.hi = t.high24h; S.lo = t.low24h; S.vol = t.vol24h; if (!S.last) S.last = t.last; },
   onBook(b) { S.book = b; },
 });
 const sel = $('sourceSel');
@@ -264,8 +264,9 @@ async function setCoin(id, { push = true, first = false } = {}) {
     if (first) { pendingSearch = id; return setCoin('btc', { push: false, first: true }); }
     openSearch(id); return;
   }
-  let qv = m.qv, vol = null;
-  if (!PRESET[id] && !(qv > 0)) { vol = await fetchQuoteVolume(m); if (g !== switchGen) return; qv = vol ? vol.qv : 0; m.qv = qv; }
+  // 门槛只看主数据源（Binance 优先）的 24h 成交额：无论从搜索还是直接打开链接进入，门槛都一致
+  let qv = m.qvP, vol = null;
+  if (!PRESET[id] && !(qv > 0)) { vol = await fetchQuoteVolume(m); if (g !== switchGen) return; qv = vol ? vol.qv : 0; m.qvP = qv; if (!m.qv) m.qv = qv; }
   coin = id; M = m;
   CF = { dp: Math.min(m.dp ?? 2, 10), qdp: id === 'eth' ? 2 : Math.min(m.qdp ?? 3, 3), ...thresholdsFor(id, qv) };
   localStorage.setItem('cw_coin', id); pushRecent(id);
