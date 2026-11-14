@@ -1,8 +1,8 @@
-import { FeedManager, SOURCES, fetchMiniTickers, fetchBinance1s, fetchBinanceAggTrades } from './feeds.js?v=9af1a12f';
-import { PRESET, universe, loadUniverse, loadTickers, fetchQuoteVolume, thresholdsFor, search as searchCoins, topByVolume, recents, pushRecent, favorites, toggleFav, primarySource } from './markets.js?v=9af1a12f';
-import { Battle } from './battle.js?v=9af1a12f';
-import { t as T, lang, setLang, onLang, applyI18n, fmtUsd, fmtShort, fmtNum } from './i18n.js?v=9af1a12f';
-import { AudioController } from './music.js?v=9af1a12f';
+import { FeedManager, SOURCES, fetchMiniTickers, fetchBinance1s, fetchBinanceAggTrades } from './feeds.js?v=90ea2eb1';
+import { PRESET, universe, loadUniverse, loadTickers, fetchQuoteVolume, thresholdsFor, search as searchCoins, topByVolume, recents, pushRecent, favorites, toggleFav, primarySource } from './markets.js?v=90ea2eb1';
+import { Battle } from './battle.js?v=90ea2eb1';
+import { t as T, lang, setLang, onLang, applyI18n, fmtUsd, fmtShort, fmtNum } from './i18n.js?v=90ea2eb1';
+import { AudioController } from './music.js?v=90ea2eb1';
 
 const $ = (id) => document.getElementById(id);
 const pad = (n) => String(n).padStart(2, '0');
@@ -374,13 +374,16 @@ function computeDepth() {
   const bb = b.bestBid(), ba = b.bestAsk(); if (!isFinite(bb) || !isFinite(ba) || bb >= ba * 1.01) return null;
   const mid = (bb + ba) / 2, NB = 50, bins = { bid: new Float64Array(NB), ask: new Float64Array(NB) };
   let b05 = 0, a05 = 0, b1 = 0, a1 = 0, minB = Infinity, maxA = 0;
+  // 覆盖范围按整本盘口最远的价位算（冷门币 ±1% 边缘可能刚好没有挂单，不应误报“仅覆盖”）
   for (const [p, q] of b.bids) {
+    if (p < minB) minB = p;
     const d = (mid - p) / mid; if (d < 0 || d > 0.01) continue;
-    const u = p * q; b1 += u; if (d <= 0.005) b05 += u; bins.bid[Math.min(NB - 1, (d / 0.01 * NB) | 0)] += u; if (p < minB) minB = p;
+    const u = p * q; b1 += u; if (d <= 0.005) b05 += u; bins.bid[Math.min(NB - 1, (d / 0.01 * NB) | 0)] += u;
   }
   for (const [p, q] of b.asks) {
+    if (p > maxA) maxA = p;
     const d = (p - mid) / mid; if (d < 0 || d > 0.01) continue;
-    const u = p * q; a1 += u; if (d <= 0.005) a05 += u; bins.ask[Math.min(NB - 1, (d / 0.01 * NB) | 0)] += u; if (p > maxA) maxA = p;
+    const u = p * q; a1 += u; if (d <= 0.005) a05 += u; bins.ask[Math.min(NB - 1, (d / 0.01 * NB) | 0)] += u;
   }
   return { bb, ba, mid, b05, a05, b1, a1, bins, cover: Math.min((mid - minB) / mid, (maxA - mid) / mid) };
 }
