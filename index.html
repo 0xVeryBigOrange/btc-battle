@@ -8,6 +8,8 @@
 <meta name="author" content="大橙子 (Big Orange) @0xVeryBigOrange" />
 <meta name="theme-color" content="#070a14" />
 <meta http-equiv="Cache-Control" content="no-cache" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob:; media-src 'self' blob: data:; connect-src 'self' https://api.binance.com https://data-api.binance.vision wss://stream.binance.com wss://stream.binance.com:9443 wss://data-stream.binance.vision https://www.okx.com wss://ws.okx.com https://api.exchange.coinbase.com wss://ws-feed.exchange.coinbase.com https://gtdvykkdvpzsnhlqlgun.supabase.co wss://gtdvykkdvpzsnhlqlgun.supabase.co; object-src 'none'; base-uri 'self'; form-action 'none'" />
+<meta name="referrer" content="strict-origin-when-cross-origin" />
 <meta property="og:type" content="website" />
 <meta property="og:site_name" content="Crypto War · 多空战场" />
 <meta property="og:title" content="Crypto War · 多空战场 ⚔️ 蓝军(多) vs 红军(空)" />
@@ -32,9 +34,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <!-- 网页字体异步加载，不阻塞渲染；加载失败时使用系统字体 -->
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Ma+Shan+Zheng&family=JetBrains+Mono:wght@500;700;800&display=swap" media="print" onload="this.media='all'" />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Ma+Shan+Zheng&family=JetBrains+Mono:wght@500;700;800&display=swap" media="print" id="gfonts" />
 <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Ma+Shan+Zheng&family=JetBrains+Mono:wght@500;700;800&display=swap" /></noscript>
-<link rel="stylesheet" href="style.css?v=8a047a9b" />
+<link rel="stylesheet" href="style.css?v=ebdd6cab" />
 </head>
 <body>
 <!-- 开场 -->
@@ -203,8 +205,8 @@
     <ul class="chat-list" id="chatList" aria-live="polite"></ul>
     <div class="chat-form">
       <div class="chat-row">
-        <input id="chatNick" class="chat-nick" maxlength="16" autocomplete="off" spellcheck="false" data-i18n-ph="chatNickPh" data-i18n-title="chatNickT" />
-        <input id="chatIn" class="chat-in" maxlength="140" autocomplete="off" enterkeyhint="send" data-i18n-ph="chatPh" data-i18n-aria="chatPh" />
+        <input id="chatNick" class="chat-nick" maxlength="16" autocomplete="off" spellcheck="false" dir="auto" data-i18n-title="chatNickT" data-i18n-aria="chatNickPh" />
+        <input id="chatIn" class="chat-in" maxlength="140" dir="auto" autocomplete="off" enterkeyhint="send" data-i18n-ph="chatPh" data-i18n-aria="chatPh" />
       </div>
       <div class="chat-row btns">
         <button type="button" class="cb bull" data-chat-side="bull" data-i18n="chatLong">喊多 🟦</button>
@@ -236,6 +238,6 @@
   </div>
   <p class="disclaimer" data-i18n="disclaimer">数据来自 Binance / OKX / Coinbase 公共行情（无需 API Key），仅供娱乐参考，不构成投资建议 · 蓝 = 多 / 买方，红 = 空 / 卖方</p>
 </footer>
-<script type="module" src="js/app.js?v=8a047a9b"></script>
+<script type="module" src="js/app.js?v=ebdd6cab"></script>
 </body>
 </html>

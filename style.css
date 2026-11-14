@@ -25,7 +25,7 @@ a{color:inherit;text-decoration:none}
 
 /* ---------- 开场 ---------- */
 .intro{animation:introFail .6s 9s forwards;position:fixed;inset:0;z-index:100;display:grid;place-items:center;background:#04060d;transition:opacity .7s ease,visibility .7s;overflow:hidden}
-.intro.done{opacity:0;visibility:hidden}
+.intro.done{opacity:0;visibility:hidden;pointer-events:none}
 .intro.js{animation:none}
 .intro-go{display:none;margin:22px auto 0;padding:16px 34px;border:0;border-radius:999px;cursor:pointer;font:800 clamp(17px,2.4vw,22px)/1 var(--cn-disp),var(--sans);letter-spacing:.08em;color:#fff;
   background:linear-gradient(90deg,#2563eb,#7c3aed 50%,#dc2626);box-shadow:0 0 0 2px rgba(253,230,138,.55),0 10px 40px rgba(124,58,237,.45),0 0 60px rgba(239,68,68,.25);animation:goPulse 1.4s ease-in-out infinite}
@@ -376,7 +376,9 @@ mark.sp-hl{background:none;color:#fde68a}
 .cm-side{font-size:10px;font-weight:800;padding:0 5px;border-radius:5px;color:#fff}
 .cm-side.bull{background:var(--blue)}.cm-side.bear{background:var(--red)}
 .cm-time{margin-left:auto;font-family:var(--mono);font-size:10.5px}
-.cm-body{color:var(--txt);white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word}
+.cm{overflow:hidden;flex-shrink:0}
+.cm-body{color:var(--txt);white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;unicode-bidi:plaintext;text-align:start}
+.cm-nick bdi{unicode-bidi:isolate}
 .chat-form{margin-top:10px;display:flex;flex-direction:column;gap:7px}
 .chat-row{display:flex;gap:7px;align-items:center}
 .chat-form input{min-width:0;background:rgba(5,8,18,.6);border:1px solid var(--line2);color:var(--txt);border-radius:10px;padding:9px 10px;font:inherit;font-size:14px;outline:none}
@@ -396,7 +398,7 @@ mark.sp-hl{background:none;color:#fde68a}
 .dm-tog.off{opacity:.6;text-decoration:line-through}
 .battle-card .dm-tog{position:absolute;right:10px;bottom:8px;z-index:3;backdrop-filter:blur(4px)}
 .danmaku{position:absolute;inset:0;pointer-events:none;overflow:hidden;z-index:2;contain:strict}
-.dm{position:absolute;left:0;white-space:nowrap;font-weight:800;font-size:17px;line-height:1.5;will-change:transform;max-width:none;
+.dm{position:absolute;left:0;white-space:nowrap;unicode-bidi:isolate;overflow:hidden;max-height:2em;font-weight:800;font-size:17px;line-height:1.5;will-change:transform;max-width:none;
   color:#fff;text-shadow:-1px -1px 0 #000,1px -1px 0 #000,-1px 1px 0 #000,1px 1px 0 #000,0 0 6px rgba(0,0,0,.8)}
 .dm.bull{color:#93c5fd;text-shadow:-1px -1px 0 #0b1a3a,1px -1px 0 #0b1a3a,-1px 1px 0 #0b1a3a,1px 1px 0 #0b1a3a,0 0 10px rgba(59,130,246,.9)}
 .dm.bear{color:#fca5a5;text-shadow:-1px -1px 0 #3a0b0b,1px -1px 0 #3a0b0b,-1px 1px 0 #3a0b0b,1px 1px 0 #3a0b0b,0 0 10px rgba(239,68,68,.9)}

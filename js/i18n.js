@@ -1,5 +1,6 @@
 // 中英文切换：?lang=zh|en > localStorage > 浏览器语言（zh* → 中文，其它 → 英文）
 const KEY = 'cw_lang';
+export const escH = (x) => String(x).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 function detect() {
   const q = new URLSearchParams(location.search).get('lang');
   if (q && /^(zh|en)/i.test(q)) return q.toLowerCase().startsWith('zh') ? 'zh' : 'en';
@@ -80,7 +81,7 @@ const D = {
     winB: (s) => `🏆 蓝军大获全胜！<small>多头压制 ${s} 秒 · 红军溃退</small>`, winR: (s) => `🏆 红军大获全胜！<small>空头压制 ${s} 秒 · 蓝军溃退</small>`,
     streak: (b, s, w) => `${b ? '蓝军' : '红军'}已压制 ${s} 秒${w ? ' 🏆' : ''}`,
     mSurgeB: '蓝军总攻', mSurgeR: '红军总攻', mUp: '蓝军上扬', mDown: '红军下压', mTie: '两军对峙',
-    notFound: (c) => `🔍 没有找到币种 ${c}<small>换个代码试试，比如 SOL、DOGE、PEPE</small>`,
+    notFound: (c) => `🔍 没有找到币种 ${escH(c)}<small>换个代码试试，比如 SOL、DOGE、PEPE</small>`,
     search: '搜索币种', searchPh: '搜索币种：代码或名称，如 SOL、狗狗币、PEPE', searchKey: '搜索币种 (按 /)',
     sFav: '⭐ 收藏', sRecent: '🕘 最近', sHot: '🔥 热门（24h 成交额）', sLoading: '正在加载币种列表…', sNone: (q) => `没有找到「${q}」`,
     sFoot: (n) => `共 ${n} 个币种 · Binance / OKX / Coinbase 现货 · ↑↓ 选择 · Enter 打开 · Esc 关闭`, sFavT: '收藏 / 取消收藏', sVol: '额',
@@ -89,7 +90,7 @@ const D = {
     chatLong: '喊多 🟦', chatShort: '喊空 🟥', chatSend: '发送', chatLongDef: '多军冲锋！🚀', chatShortDef: '空军砸盘！📉',
     chatLoading: '正在连接喊单频道…', chatEmpty: '还没有人喊单，来抢沙发！', chatDown: '评论暂不可用，稍后自动重试（不影响战场）',
     chatRate: '喊太快了，歇 3 秒再来', chatRateG: '战场太热闹了，稍等几秒再喊', chatErr: '发送失败，请重试', chatEmptyBody: '先写点内容',
-    dmOn: '弹幕 开', dmOff: '弹幕 关', dmT: '弹幕开关', chatLive: '实时', chatOff: '重连中', chatMe: '我', chatSideBull: '多', chatSideBear: '空',
+    dmOn: '弹幕 开', dmOff: '弹幕 关', dmT: '弹幕开关', chatLive: '实时', chatOff: '重连中', chatMe: '我', chatSideBull: '多', chatSideBear: '空', chatNickPre: '韭菜',
     chatNote: '匿名发言，内容为网友观点，不代表本站，不构成投资建议',
   },
   en: {
@@ -131,16 +132,16 @@ const D = {
     winB: (s) => `🏆 Blue Army wins!<small>Bulls held the field for ${s}s · Red retreats</small>`, winR: (s) => `🏆 Red Army wins!<small>Bears held the field for ${s}s · Blue retreats</small>`,
     streak: (b, s, w) => `${b ? 'Blue' : 'Red'} dominating for ${s}s${w ? ' 🏆' : ''}`,
     mSurgeB: 'Blue charge', mSurgeR: 'Red charge', mUp: 'Blue rising', mDown: 'Red pressing', mTie: 'Standoff',
-    notFound: (c) => `🔍 Coin ${c} not found<small>Try a ticker like SOL, DOGE or PEPE</small>`,
+    notFound: (c) => `🔍 Coin ${escH(c)} not found<small>Try a ticker like SOL, DOGE or PEPE</small>`,
     search: 'Search coins', searchPh: 'Search coins: ticker or name, e.g. SOL, dogecoin, PEPE', searchKey: 'Search coins (press /)',
     sFav: '⭐ Favorites', sRecent: '🕘 Recent', sHot: '🔥 Top by 24h volume', sLoading: 'Loading coin list…', sNone: (q) => `No coins match “${q}”`,
     sFoot: (n) => `${n} coins · Binance / OKX / Coinbase spot · ↑↓ select · Enter open · Esc close`, sFavT: 'Add / remove favorite', sVol: 'Vol',
     mLocked: '🔊 Tap to start war music', mOff: 'Music off', mSfx: '💥 SFX', crit: 'CRIT ',
     chatT: 'Battle Chat', chatSub: 'anonymous · live · danmaku', chatPh: 'Say something… call your trade (max 140)', chatNickPh: 'Nickname', chatNickT: 'Nickname (optional, saved on this device)',
-    chatLong: 'Long 🟦', chatShort: 'Short 🟥', chatSend: 'Send', chatLongDef: 'Bulls, charge! 🚀', chatShortDef: 'Bears, dump it! 📉',
+    chatLong: 'Long 🟦', chatShort: 'Short 🟥', chatSend: 'Send', chatLongDef: 'Bulls charge! 🚀', chatShortDef: 'Bears dump! 📉',
     chatLoading: 'Connecting to the chat…', chatEmpty: 'No calls yet — be the first!', chatDown: 'Comments unavailable right now, retrying (the battle is unaffected)',
     chatRate: 'Too fast — wait 3 seconds', chatRateG: 'The battlefield is busy, try again in a few seconds', chatErr: 'Send failed, please retry', chatEmptyBody: 'Write something first',
-    dmOn: 'Danmaku on', dmOff: 'Danmaku off', dmT: 'Toggle flying comments', chatLive: 'Live', chatOff: 'Reconnecting', chatMe: 'me', chatSideBull: 'L', chatSideBear: 'S',
+    dmOn: 'Danmaku on', dmOff: 'Danmaku off', dmT: 'Toggle flying comments', chatLive: 'Live', chatOff: 'Reconnecting', chatMe: 'me', chatSideBull: 'Long', chatSideBear: 'Short', chatNickPre: 'Degen',
     chatNote: 'Anonymous posts are visitors\' opinions, not financial advice',
   },
 };

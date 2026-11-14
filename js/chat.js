@@ -1,6 +1,6 @@
 // 匿名喊单评论区 + 弹幕：Supabase REST（读/写）+ Realtime WebSocket（postgres_changes INSERT），不依赖 SDK
 // 只使用公开的 publishable key；表开启 RLS，匿名只能读和发，数据库端限流（同 IP 3 秒 1 条 / 每分钟 10 条）
-import { t as T, onLang } from './i18n.js?v=8a047a9b';
+import { t as T, onLang, lang as _lang } from './i18n.js?v=ebdd6cab';
 
 const SB_URL = 'https://gtdvykkdvpzsnhlqlgun.supabase.co';
 const SB_KEY = 'sb_publishable_i5XDXdgwAMTA0PHFCWTeew_qDAv9-pU';
@@ -8,6 +8,30 @@ const COLS = 'id,created_at,coin,side,nick,body';
 const MAX_LIST = 100, REPLAY = 20, MAX_LEN = 140;
 const $ = (id) => document.getElementById(id);
 const pad = (n) => String(n).padStart(2, '0');
+const SIDES = new Set(['bull', 'bear', 'neutral']);
+const COIN_RE = /^[A-Za-z0-9\u4e00-\u9fff]{1,20}$/;
+// 与数据库端 private.clean_text 一致：去掉控制字符、零宽空格、双向覆盖/嵌入/隔离字符，限制叠加符号与换行
+const BAD_CH = /[\u0000-\u0009\u000b-\u001f\u007f-\u009f\u200b\u200e\u200f\u202a-\u202e\u2060-\u2064\u2066-\u2069\ufeff\ufff9-\ufffb]/g;
+const ZALGO = /([\u0300-\u036f\u1ab0-\u1aff\u1dc0-\u1dff\u20d0-\u20ff\ufe20-\ufe2f]{2})[\u0300-\u036f\u1ab0-\u1aff\u1dc0-\u1dff\u20d0-\u20ff\ufe20-\ufe2f]+/g;
+function clean(t, single) {
+  t = String(t ?? '').replace(/\r\n?/g, '\n').replace(/\t/g, ' ').replace(BAD_CH, '').replace(ZALGO, '$1');
+  if (single) return t.replace(/\s+/g, ' ').trim();
+  t = t.replace(/ +\n/g, '\n').replace(/\n{3,}/g, '\n\n');
+  const L = t.split('\n'); if (L.length > 6) t = L.slice(0, 6).join('\n') + ' ' + L.slice(6).join(' ');
+  return t.replace(/^[ \n]+|[ \n]+$/g, '');
+}
+const cpLen = (x) => Array.from(x).length;
+// 只渲染格式正确的行（REST 与 Realtime 都过一遍），伪造/异常数据直接丢弃
+function valid(r) {
+  if (!r || typeof r !== 'object') return null;
+  const id = Number(r.id);
+  if (!Number.isSafeInteger(id) || id <= 0) return null;
+  if (!SIDES.has(r.side) || typeof r.body !== 'string' || typeof r.nick !== 'string' || typeof r.coin !== 'string') return null;
+  const body = clean(r.body, false), nick = clean(r.nick, true).slice(0, 32);
+  if (!body || cpLen(body) > MAX_LEN || !nick || !COIN_RE.test(r.coin)) return null;
+  const d = new Date(r.created_at); if (isNaN(d)) return null;
+  return { id, created_at: r.created_at, coin: r.coin, side: r.side, nick, body };
+}
 
 const H = { apikey: SB_KEY, 'Content-Type': 'application/json' };
 async function rest(path, opt = {}, ms = 8000) {
@@ -55,6 +79,7 @@ class Danmaku {
   }
   fly({ c, mine, tag }, lane, g, now) {
     const el = document.createElement('div');
+    el.dir = 'auto';
     el.className = 'dm ' + (c.side === 'bull' ? 'bull' : c.side === 'bear' ? 'bear' : 'neu') + (mine ? ' mine' : '');
     if (tag) { const s = document.createElement('span'); s.className = 'dm-tag'; s.textContent = tag; el.appendChild(s); }
     el.appendChild(document.createTextNode(c.body));
@@ -77,12 +102,17 @@ export function initChat({ getCoin, battleHost }) {
   const mine = new Set(JSON.parse(sessionStorage.getItem('cw_mine') || '[]'));
   let lastId = 0, state = 'loading', ws = null, wsRef = 0, hb = null, backoff = 1000, cooldown = 0, msgTimer = null, retryT = null;
 
-  // 昵称：本机固定一个随机昵称
-  let defNick = localStorage.getItem('cw_nick_def');
-  if (!defNick) { defNick = '韭菜#' + pad(Math.floor(Math.random() * 10000)).padStart(4, '0'); localStorage.setItem('cw_nick_def', defNick); }
-  nickIn.value = localStorage.getItem('cw_nick') || '';
-  nickIn.placeholder = defNick;
-  nickIn.addEventListener('change', () => { nickIn.value = nickIn.value.trim().slice(0, 16); localStorage.setItem('cw_nick', nickIn.value); });
+  // 昵称：本机固定一个随机编号，前缀随语言（中文 韭菜#1234 / 英文 Degen#1234）
+  let nickNum = localStorage.getItem('cw_nick_num');
+  if (!/^\d{4}$/.test(nickNum || '')) {
+    const old = (localStorage.getItem('cw_nick_def') || '').match(/(\d{4})$/);
+    nickNum = old ? old[1] : String(Math.floor(Math.random() * 10000)).padStart(4, '0');
+    localStorage.setItem('cw_nick_num', nickNum); localStorage.removeItem('cw_nick_def');
+  }
+  const defNick = () => T('chatNickPre') + '#' + nickNum;
+  nickIn.value = clean(localStorage.getItem('cw_nick') || '', true).slice(0, 16);
+  nickIn.placeholder = defNick();
+  nickIn.addEventListener('change', () => { nickIn.value = clean(nickIn.value, true).slice(0, 16); localStorage.setItem('cw_nick', nickIn.value); });
 
   function flash(text, bad = true) {
     msg.textContent = text; msg.className = 'chat-msg show' + (bad ? ' bad' : '');
@@ -98,25 +128,35 @@ export function initChat({ getCoin, battleHost }) {
     if (!text) { ph && ph.remove(); return; }
     if (ph) ph.textContent = text; else { const d = document.createElement('div'); d.className = 'chat-ph'; d.textContent = text; list.appendChild(d); }
   }
-  const fmtTime = (iso) => { const d = new Date(iso); return isNaN(d) ? '' : `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+  const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const fmtTime = (iso) => {
+    const d = new Date(iso); if (isNaN(d)) return '';
+    const hm = `${pad(d.getHours())}:${pad(d.getMinutes())}`, n = new Date();
+    if (d.toDateString() === n.toDateString()) return hm;
+    return (_lang === 'en' ? `${MON[d.getMonth()]} ${d.getDate()} ` : `${d.getMonth() + 1}/${d.getDate()} `) + hm;
+  };
   function row(c) {
     const li = document.createElement('li'); li.className = 'cm ' + c.side + (mine.has(c.id) ? ' mine' : ''); li.dataset.id = c.id;
     const top = document.createElement('div'); top.className = 'cm-top';
-    const nick = document.createElement('span'); nick.className = 'cm-nick'; nick.textContent = c.nick + (mine.has(c.id) ? ` (${T('chatMe')})` : '');
+    const nick = document.createElement('span'); nick.className = 'cm-nick';
+    const nb = document.createElement('bdi'); nb.textContent = c.nick; nick.appendChild(nb); // bdi：昵称里的 RTL 文字不会影响旁边的界面
+    if (mine.has(c.id)) nick.appendChild(document.createTextNode(` (${T('chatMe')})`));
     const coin = document.createElement('span'); coin.className = 'cm-coin'; coin.textContent = c.coin;
     top.append(nick, coin);
     if (c.side !== 'neutral') { const sd = document.createElement('span'); sd.className = 'cm-side ' + c.side; sd.textContent = T(c.side === 'bull' ? 'chatSideBull' : 'chatSideBear'); top.append(sd); }
     const tm = document.createElement('span'); tm.className = 'cm-time'; tm.textContent = fmtTime(c.created_at); top.append(tm);
-    const body = document.createElement('div'); body.className = 'cm-body'; body.textContent = c.body; // 纯文本：不解析 HTML，链接不可点
+    const body = document.createElement('div'); body.className = 'cm-body'; body.dir = 'auto'; body.textContent = c.body; // 纯文本：不解析 HTML，链接不可点
     li.append(top, body); return li;
   }
   const nearBottom = () => list.scrollHeight - list.scrollTop - list.clientHeight < 60;
-  function add(cs, { danmaku = true } = {}) {
+  function add(cs, { danmaku = true, fromRest = false } = {}) {
     const stick = nearBottom() || !items.size;
     let added = 0;
-    for (const c of cs) {
+    for (const raw of cs) {
+      const c = valid(raw);
       if (!c || items.has(c.id)) continue;
-      items.set(c.id, c); lastId = Math.max(lastId, c.id); added++;
+      items.set(c.id, c); added++;
+      if (fromRest || !lastId || c.id < lastId + 1000) lastId = Math.max(lastId, c.id);
       list.appendChild(row(c));
       if (danmaku) dm.push(c, { mine: mine.has(c.id), tag: tagFor(c) });
     }
@@ -124,15 +164,16 @@ export function initChat({ getCoin, battleHost }) {
     if (added) { renderPlaceholder(); if (stick) list.scrollTop = list.scrollHeight; }
   }
   const tagFor = (c) => (c.coin && c.coin.toUpperCase() !== (getCoin() || '').toUpperCase()) ? c.coin : '';
-  function rerender() { list.replaceChildren(); for (const c of items.values()) list.appendChild(row(c)); renderPlaceholder(); list.scrollTop = list.scrollHeight; setState(state); syncDmBtns(); }
+  function rerender() { nickIn.placeholder = defNick(); list.replaceChildren(); for (const c of items.values()) list.appendChild(row(c)); renderPlaceholder(); list.scrollTop = list.scrollHeight; setState(state); syncDmBtns(); }
 
   // 首次加载 + 断线补齐
   async function load() {
     try {
-      const q = lastId ? `comments?select=${COLS}&id=gt.${lastId}&order=id.asc&limit=${MAX_LIST}` : `comments?select=${COLS}&order=id.desc&limit=${MAX_LIST}`;
-      let rows = await rest(q); if (!lastId) rows.reverse();
-      const first = !items.size && !lastId;
-      add(rows, { danmaku: !first });
+      const since = Number.isSafeInteger(lastId) && lastId > 0 ? lastId : 0; // 只有整数进 URL 过滤条件
+      const q = since ? `comments?select=${COLS}&id=gt.${since}&order=id.asc&limit=${MAX_LIST}` : `comments?select=${COLS}&order=id.desc&limit=${MAX_LIST}`;
+      let rows = await rest(q); if (!Array.isArray(rows)) rows = []; if (!since) rows.reverse();
+      const first = !items.size && !since;
+      add(rows, { danmaku: !first, fromRest: true });
       if (first) { // 开场把最近 20 条错开飘一遍
         rows.slice(-REPLAY).forEach((c, i) => setTimeout(() => dm.push(c, { mine: mine.has(c.id), tag: tagFor(c) }), 2500 + i * 700));
       }
@@ -164,7 +205,9 @@ export function initChat({ getCoin, battleHost }) {
         backoff = 1000; setState('live'); load(); // 补齐断线期间的留言
       } else if (m.event === 'postgres_changes') {
         const r = m.payload && m.payload.data && m.payload.data.record;
-        if (r && r.id && typeof r.body === 'string') add([{ id: +r.id, created_at: r.created_at, coin: String(r.coin || ''), side: r.side, nick: String(r.nick || ''), body: r.body }]);
+        // 只接受服务器推送的 public.comments INSERT；广播(broadcast)等其它事件一律忽略，字段再校验一遍
+        const d = m.payload && m.payload.data;
+        if (d && d.type === 'INSERT' && d.schema === 'public' && d.table === 'comments' && d.record) add([d.record]);
       } else if (m.event === 'phx_error' || m.event === 'phx_close' || (m.event === 'phx_reply' && m.payload && m.payload.status === 'error')) {
         try { sock.close(); } catch {}
       }
@@ -178,18 +221,19 @@ export function initChat({ getCoin, battleHost }) {
 
   // 发送
   async function post(side) {
-    let body = input.value.trim();
+    if (!SIDES.has(side)) side = 'neutral';
+    let body = clean(input.value, false);
     if (!body) { if (side === 'bull') body = T('chatLongDef'); else if (side === 'bear') body = T('chatShortDef'); else { flash(T('chatEmptyBody')); input.focus(); return; } }
     body = Array.from(body).slice(0, MAX_LEN).join('');
     if (Date.now() < cooldown) { flash(T('chatRate')); return; }
     cooldown = Date.now() + 3000;
-    const nick = (nickIn.value.trim() || defNick).slice(0, 16);
-    const coin = (getCoin() || 'BTC').toUpperCase().slice(0, 20);
+    const nick = Array.from(clean(nickIn.value, true) || defNick()).slice(0, 16).join('');
+    let coin = String(getCoin() || 'BTC').toUpperCase().slice(0, 20); if (!COIN_RE.test(coin)) coin = 'BTC';
     setBusy(true);
     try {
       const r = await rest('comments?select=' + COLS, { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ coin, side, nick, body }) });
       const c = r && r[0];
-      if (c) { mine.add(c.id); sessionStorage.setItem('cw_mine', JSON.stringify([...mine].slice(-50))); add([c]); list.scrollTop = list.scrollHeight; }
+      if (c) { mine.add(c.id); sessionStorage.setItem('cw_mine', JSON.stringify([...mine].slice(-50))); add([c], { fromRest: true }); list.scrollTop = list.scrollHeight; }
       input.value = ''; updCnt();
     } catch (e) {
       const m = String(e.message || '');

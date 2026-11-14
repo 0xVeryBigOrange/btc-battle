@@ -1,9 +1,9 @@
-import { FeedManager, SOURCES, fetchMiniTickers, fetchBinance1s, fetchBinanceAggTrades } from './feeds.js?v=8a047a9b';
-import { PRESET, universe, loadUniverse, loadTickers, fetchQuoteVolume, thresholdsFor, search as searchCoins, topByVolume, recents, pushRecent, favorites, toggleFav, primarySource } from './markets.js?v=8a047a9b';
-import { Battle } from './battle.js?v=8a047a9b';
-import { t as T, lang, setLang, onLang, applyI18n, fmtUsd, fmtShort, fmtNum } from './i18n.js?v=8a047a9b';
-import { AudioController } from './music.js?v=8a047a9b';
-import { initChat } from './chat.js?v=8a047a9b';
+import { FeedManager, SOURCES, fetchMiniTickers, fetchBinance1s, fetchBinanceAggTrades } from './feeds.js?v=ebdd6cab';
+import { PRESET, universe, loadUniverse, loadTickers, fetchQuoteVolume, thresholdsFor, search as searchCoins, topByVolume, recents, pushRecent, favorites, toggleFav, primarySource } from './markets.js?v=ebdd6cab';
+import { Battle } from './battle.js?v=ebdd6cab';
+import { t as T, lang, setLang, onLang, applyI18n, fmtUsd, fmtShort, fmtNum } from './i18n.js?v=ebdd6cab';
+import { AudioController } from './music.js?v=ebdd6cab';
+import { initChat } from './chat.js?v=ebdd6cab';
 
 const $ = (id) => document.getElementById(id);
 const pad = (n) => String(n).padStart(2, '0');
@@ -19,6 +19,8 @@ const fmtP = (p) => fmtPx(p, CF.dp);
 const fmtQ = (q) => q >= 1e5 ? fmtNum(q) : q >= 1000 ? q.toFixed(0) : q >= 100 ? q.toFixed(1) : q >= 10 ? q.toFixed(Math.min(2, CF.qdp)) : q.toFixed(CF.qdp);
 const wan = (v) => fmtShort(v);
 applyI18n();
+// 网页字体：先以 media=print 异步下载，加载完再启用（替代 HTML 内联 onload，便于 CSP 禁止内联脚本）
+{ const gf = document.getElementById('gfonts'); if (gf) { if (gf.sheet) gf.media = 'all'; else gf.addEventListener('load', () => { gf.media = 'all'; }, { once: true }); } }
 
 // ---------- 开场 ----------
 const intro = $('intro'), introBar = $('introBar'), introMsg = $('introMsg');
