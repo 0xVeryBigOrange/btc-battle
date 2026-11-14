@@ -1,0 +1,135 @@
+// 中英文切换：?lang=zh|en > localStorage > 浏览器语言（zh* → 中文，其它 → 英文）
+const KEY = 'cw_lang';
+function detect() {
+  const q = new URLSearchParams(location.search).get('lang');
+  if (q && /^(zh|en)/i.test(q)) return q.toLowerCase().startsWith('zh') ? 'zh' : 'en';
+  const s = localStorage.getItem(KEY); if (s === 'zh' || s === 'en') return s;
+  const nav = (navigator.languages && navigator.languages[0]) || navigator.language || 'en';
+  return /^zh/i.test(nav) ? 'zh' : 'en';
+}
+export let lang = detect();
+const subs = [];
+export function onLang(fn) { subs.push(fn); }
+export function setLang(l) {
+  if (l !== 'zh' && l !== 'en') return;
+  lang = l; localStorage.setItem(KEY, l);
+  const u = new URL(location.href); u.searchParams.set('lang', l); history.replaceState(null, '', u);
+  applyI18n(); subs.forEach(f => f(l));
+}
+
+// 金额：中文 万/亿，英文 K/M/B
+export function fmtUsd(v) {
+  if (lang === 'en') {
+    if (v >= 1e9) return '$' + (v / 1e9).toFixed(2) + 'B';
+    if (v >= 1e6) return '$' + (v / 1e6).toFixed(v >= 1e8 ? 0 : 2) + 'M';
+    if (v >= 1e4) return '$' + (+(v / 1e3).toFixed(v >= 1e5 ? 0 : 1)) + 'K';
+    return '$' + Math.round(v).toLocaleString('en-US');
+  }
+  if (v >= 1e8) return '$' + (v / 1e8).toFixed(2) + '亿';
+  if (v >= 1e4) return '$' + (+(v / 1e4).toFixed(v >= 1e6 ? 0 : 1)) + '万';
+  return '$' + Math.round(v).toLocaleString('en-US');
+}
+// 门槛筹码（不带 $）
+export function fmtShort(v) {
+  if (lang === 'en') return v >= 1e6 ? +(v / 1e6).toFixed(1) + 'M' : v >= 1e3 ? +(v / 1e3).toFixed(1) + 'K' : String(Math.round(v));
+  return v >= 1e4 ? +(v / 1e4).toFixed(1) + '万' : Math.round(v).toLocaleString();
+}
+
+const D = {
+  zh: {
+    title: (p) => `${p ? p + ' · ' : ''}Crypto War · 多空战场 | BTC / ETH 实时多空对决`,
+    metaDesc: 'Crypto War · 多空战场：BTC / ETH 实时价格、挂单与吃单对决，蓝军（多）vs 红军（空）动画战场。by 大橙子 @0xVeryBigOrange',
+    introSub: '多 空 战 场', introGo: '⚔️ 点击进入战场 🔊', introHint: '实时行情驱动 · 战鼓随多空节奏变化',
+    introGather: '集结部队中…', introConn: (l) => `连接战场情报 · ${l}…`, introScout: '侦察敌情中…', introReady: '部队就位',
+    introStart: '⚔️ 战斗开始！', introClick: '战鼓已备好 · 点击开战',
+    home: 'Crypto War 首页', wmCn: '多空战场', byTitle: '关注作者 大橙子 @0xVeryBigOrange', byName: '大橙子',
+    connecting: '连接中…', source: '数据源', auto: '自动', music: '♪ 配乐',
+    audioTitle: '战争配乐 / 音效', audioAria: '战争配乐与音效', apTitle: '⚔️ 战争配乐 <small>随实时战况变化</small>',
+    apMusic: '🎵 音乐', apSfx: '💥 音效', apVol: '🔊 音量',
+    apNote: '太鼓 + 铜管实时合成，全部由行情驱动：成交越快鼓点越快（BPM）；价格每跳一下弹一个音，涨则上行、跌则下行；1 分钟涨跌决定明暗调；每笔大单一声炮响；总攻、胜利、巨鲸各有专属音效。切到后台自动暂停。',
+    followX: '关注 @0xVeryBigOrange', langTitle: '切换语言 / Language',
+    tps: (n) => `${n} 笔/秒`, hi: '高', lo: '低', vol24: '24h 量',
+    flagL: '多', flagS: '空', blue: '蓝军', red: '红军', power: '战力',
+    stTie: '⚖️ 两军对峙', stBlue: '🔵 蓝军推进', stRed: '🔴 红军压制', stSurgeB: '🔥 蓝军总攻', stSurgeR: '🔥 红军总攻',
+    basisTitle: '战力 = 价格涨跌 50%（10秒 + 1分钟）+ 吃单 30%（10秒 + 1分钟）+ ±0.5% 挂单 20%',
+    basisWait: '战况依据：等待数据…', basis: '战况依据：', b10: '10秒', b60: '1分钟', bOnly: (n) => `(仅${n}秒)`, bLast: '最新', bTk: '吃单买:卖', bBk: '挂单买:卖',
+    hudL: '蓝军 · 买方', hudR: '卖方 · 红军',
+    legend: (a, b, c) => `小兵 = 成交 · 炮弹 ≥ $${a} · 重炮 ≥ $${b} · 🐋 空袭 ≥ $${c}`,
+    taker: '吃单', takerSub: '主动成交 · 谁在冲锋', w10: '10 秒', w60: '1 分钟', w300: '5 分钟', delta: '5 分钟净主动买入',
+    only: (n) => `仅${n}秒`, cover: (p) => `仅覆盖±${p}%`, buy: '买', sell: '卖', bid: '买盘', ask: '卖盘',
+    book: '挂单', bookSub: '盘口深度 · 谁的城墙厚', bb: '买一', ba: '卖一', spr: '价差',
+    trades: '大单战报', thTitle: '大单门槛（单笔主动成交金额）', hTime: '时间', hSide: '方向', hPx: '价格', hQty: '数量', hUsd: '金额',
+    sideBuy: '多 买', sideSell: '空 卖',
+    waitBig: '等待大单出现…', loadingBig: '正在加载最近的大单…',
+    noBig: (m, th) => `近 ${m} 分钟没有 ≥ $${th} 的大单<br><small>行情清淡，可点上方调低门槛</small>`,
+    bigSince: (m) => `已载入近 ${m} 分钟 · 同一毫秒同方向的成交合并为一笔主动单`,
+    auSub: 'Crypto War · 多空战场 作者', ghSrc: 'GitHub 源码',
+    disclaimer: '数据来自 Binance / OKX / Coinbase 公共行情（无需 API Key），仅供娱乐参考，不构成投资建议 · 蓝 = 多 / 买方，红 = 空 / 卖方',
+    flowCap: '近 2 分钟 主动买(上) / 卖(下) · 黄线=累计净额', depthWait: '等待盘口数据…', wallB: '买盘城墙 ', wallA: '卖盘城墙 ',
+    depthCover: (p) => `该数据源深度覆盖约 ±${p}%`,
+    sConnecting: (l) => `正在连接 ${l}…`, sOpen: (l) => `已连接 ${l}，等待数据…`, sLive: (l) => `实时 · ${l}`, sError: (n, r) => `${n} ${r}，重试/切换中…`,
+    eClosed: '连接断开', eTimeout: '超时无数据', eStall: '数据中断',
+    toCoin: (c) => `⚔️ 转战 ${c} 战场`,
+    whale: (b, u) => `🐋 ${b ? '蓝军' : '红军'}巨鲸空袭<small>${b ? '主动买入' : '主动卖出'} ${u}</small>`,
+    surgeB: '⚔️ 蓝军发起总攻！<small>多头主动出击</small>', surgeR: '⚔️ 红军发起总攻！<small>空头主动出击</small>',
+    winB: (s) => `🏆 蓝军大获全胜！<small>多头压制 ${s} 秒 · 红军溃退</small>`, winR: (s) => `🏆 红军大获全胜！<small>空头压制 ${s} 秒 · 蓝军溃退</small>`,
+    streak: (b, s, w) => `${b ? '蓝军' : '红军'}已压制 ${s} 秒${w ? ' 🏆' : ''}`,
+    mSurgeB: '蓝军总攻', mSurgeR: '红军总攻', mUp: '蓝军上扬', mDown: '红军下压', mTie: '两军对峙',
+    mLocked: '🔊 点击开启战歌', mOff: '配乐已关', mSfx: '💥 音效', crit: '暴击 ',
+  },
+  en: {
+    title: (p) => `${p ? p + ' · ' : ''}Crypto War · Bulls vs Bears | Live BTC / ETH battle`,
+    metaDesc: 'Crypto War: live BTC / ETH price, order book and taker flow as an animated battle — Blue Army (bulls) vs Red Army (bears). by 大橙子 (Big Orange) @0xVeryBigOrange',
+    introSub: 'BULLS · VS · BEARS', introGo: '⚔️ Enter the battlefield 🔊', introHint: 'Driven by live market data · the drums follow the bulls and bears',
+    introGather: 'Mustering the troops…', introConn: (l) => `Connecting to ${l}…`, introScout: 'Scouting the enemy…', introReady: 'Troops in position',
+    introStart: '⚔️ Battle begins!', introClick: 'War drums ready · click to fight',
+    home: 'Crypto War home', wmCn: 'Bulls vs Bears', byTitle: 'Follow the creator 大橙子 (Big Orange) @0xVeryBigOrange', byName: '大橙子 · Big Orange',
+    connecting: 'Connecting…', source: 'Data source', auto: 'Auto', music: '♪ Music',
+    audioTitle: 'War music / SFX', audioAria: 'War music and sound effects', apTitle: '⚔️ War music <small>follows the live battle</small>',
+    apMusic: '🎵 Music', apSfx: '💥 SFX', apVol: '🔊 Volume',
+    apNote: 'Taiko drums + brass synthesized live, all driven by the market: faster trading → faster drums (BPM); every price tick plays a note, up when price rises, down when it falls; the 1-minute change sets major/minor mood; every big trade fires a cannon; surges, victories and whales have their own sounds. Pauses automatically in the background.',
+    followX: 'Follow @0xVeryBigOrange', langTitle: 'Language / 切换语言',
+    tps: (n) => `${n} trades/s`, hi: 'H', lo: 'L', vol24: '24h Vol',
+    flagL: 'L', flagS: 'S', blue: 'Blue', red: 'Red', power: ' power',
+    stTie: '⚖️ Standoff', stBlue: '🔵 Blue advances', stRed: '🔴 Red presses', stSurgeB: '🔥 Blue charge', stSurgeR: '🔥 Red charge',
+    basisTitle: 'Power = price change 50% (10s + 1m) + taker flow 30% (10s + 1m) + order book within ±0.5% 20%',
+    basisWait: 'Why: waiting for data…', basis: 'Why: ', b10: '10s', b60: '1m', bOnly: (n) => `(only ${n}s)`, bLast: 'Last', bTk: 'Taker buy:sell', bBk: 'Book bid:ask',
+    hudL: 'Blue Army · Buyers', hudR: 'Sellers · Red Army',
+    legend: (a, b, c) => `Soldiers = trades · Shell ≥ $${a} · Heavy ≥ $${b} · 🐋 Air strike ≥ $${c}`,
+    taker: 'Takers', takerSub: 'Market orders · who is charging', w10: '10s', w60: '1 min', w300: '5 min', delta: '5-min net taker buy',
+    only: (n) => `only ${n}s`, cover: (p) => `covers only ±${p}%`, buy: 'Buy', sell: 'Sell', bid: 'Bids', ask: 'Asks',
+    book: 'Order Book', bookSub: 'Depth · whose wall is thicker', bb: 'Bid', ba: 'Ask', spr: 'Spread',
+    trades: 'Big Trades', thTitle: 'Big-trade threshold (taker order value)', hTime: 'Time', hSide: 'Side', hPx: 'Price', hQty: 'Size', hUsd: 'Value',
+    sideBuy: 'BUY', sideSell: 'SELL',
+    waitBig: 'Waiting for big trades…', loadingBig: 'Loading recent big trades…',
+    noBig: (m, th) => `No trades ≥ $${th} in the last ${m} min<br><small>Quiet market — lower the threshold above</small>`,
+    bigSince: (m) => `Last ${m} min loaded · fills in the same millisecond and side are merged into one taker order`,
+    auSub: 'Creator of Crypto War · Bulls vs Bears', ghSrc: 'GitHub source',
+    disclaimer: 'Data from Binance / OKX / Coinbase public market feeds (no API key). For entertainment only, not investment advice · Blue = bulls / buyers, Red = bears / sellers',
+    flowCap: 'Last 2 min · taker buys (up) / sells (down) · yellow = cumulative net', depthWait: 'Waiting for order book…', wallB: 'Bid wall ', wallA: 'Ask wall ',
+    depthCover: (p) => `This source covers about ±${p}% depth`,
+    sConnecting: (l) => `Connecting to ${l}…`, sOpen: (l) => `Connected to ${l}, waiting for data…`, sLive: (l) => `Live · ${l}`, sError: (n, r) => `${n} ${r}, retrying / switching…`,
+    eClosed: 'connection lost', eTimeout: 'no data (timeout)', eStall: 'data stalled',
+    toCoin: (c) => `⚔️ Moving to the ${c} front`,
+    whale: (b, u) => `🐋 ${b ? 'Blue' : 'Red'} whale air strike<small>${b ? 'Taker buy' : 'Taker sell'} ${u}</small>`,
+    surgeB: '⚔️ Blue launches an all-out attack!<small>Bulls on the offensive</small>', surgeR: '⚔️ Red launches an all-out attack!<small>Bears on the offensive</small>',
+    winB: (s) => `🏆 Blue Army wins!<small>Bulls held the field for ${s}s · Red retreats</small>`, winR: (s) => `🏆 Red Army wins!<small>Bears held the field for ${s}s · Blue retreats</small>`,
+    streak: (b, s, w) => `${b ? 'Blue' : 'Red'} dominating for ${s}s${w ? ' 🏆' : ''}`,
+    mSurgeB: 'Blue charge', mSurgeR: 'Red charge', mUp: 'Blue rising', mDown: 'Red pressing', mTie: 'Standoff',
+    mLocked: '🔊 Tap to start war music', mOff: 'Music off', mSfx: '💥 SFX', crit: 'CRIT ',
+  },
+};
+export function t(key, ...a) {
+  const v = D[lang][key] ?? D.zh[key];
+  return typeof v === 'function' ? v(...a) : v;
+}
+// HTML 标记：data-i18n=文本 / data-i18n-html / data-i18n-title / data-i18n-aria
+export function applyI18n(root = document) {
+  document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en';
+  root.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
+  root.querySelectorAll('[data-i18n-html]').forEach(el => { el.innerHTML = t(el.dataset.i18nHtml); });
+  root.querySelectorAll('[data-i18n-title]').forEach(el => { el.title = t(el.dataset.i18nTitle); });
+  root.querySelectorAll('[data-i18n-aria]').forEach(el => { el.setAttribute('aria-label', t(el.dataset.i18nAria)); });
+  const md = document.querySelector('meta[name="description"]'); if (md) md.content = t('metaDesc');
+  document.querySelectorAll('[data-lang]').forEach(b => b.classList.toggle('on', b.dataset.lang === lang));
+}

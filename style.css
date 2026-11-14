@@ -85,6 +85,10 @@ a{color:inherit;text-decoration:none}
 .tab-ind{position:absolute;z-index:0;top:4px;bottom:4px;left:4px;width:0;border-radius:10px;
   background:linear-gradient(135deg,rgba(59,130,246,.35),rgba(239,68,68,.3));border:1px solid var(--line2);box-shadow:0 0 18px rgba(147,197,253,.18);transition:left .35s cubic-bezier(.3,1.3,.5,1),width .35s}
 .controls{display:flex;align-items:center;gap:8px;justify-self:end}
+.lang-tog{display:inline-flex;height:34px;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:rgba(255,255,255,.05);flex:none}
+.lang-tog button{border:0;background:none;color:var(--mut);font:700 12px/1 var(--sans);padding:0 9px;cursor:pointer;transition:all .2s}
+.lang-tog button:hover{color:var(--txt)}
+.lang-tog button.on{background:rgba(251,191,36,.18);color:#fde68a}
 .status{display:flex;align-items:center;gap:8px;padding:7px 12px;border-radius:999px;background:rgba(255,255,255,.05);border:1px solid var(--line);font-size:12.5px;color:var(--mut);white-space:nowrap;max-width:260px;overflow:hidden;text-overflow:ellipsis}
 .status .dot{flex:none;width:8px;height:8px;border-radius:50%;background:#64748b}
 .status.live .dot{background:#22c55e;box-shadow:0 0 0 0 rgba(34,197,94,.6);animation:pulse 1.6s infinite}
@@ -204,7 +208,9 @@ canvas.depth{height:120px}
 .trades li.whale{box-shadow:inset 3px 0 0 var(--gold);animation:slidein .5s ease-out,whale 1.2s ease-out}
 @keyframes whale{0%,30%{background-color:rgba(251,191,36,.25)}}
 .trades li span:nth-child(n+3),.trades-head span:nth-child(n+3){text-align:right}
-.trades .empty{display:block;text-align:center;color:var(--mut);padding:24px;font-family:inherit}
+.trades .empty{display:block;text-align:center;color:var(--mut);padding:24px;font-family:var(--sans);line-height:1.6}
+.trades .empty small{opacity:.75}
+.trades-note{font-size:10.5px;color:var(--mut);padding:6px 8px 0;opacity:.75;line-height:1.4}
 @keyframes slidein{from{transform:translateX(-14px);opacity:0;filter:brightness(2.2)}to{transform:none;opacity:1}}
 
 /* ---------- 页脚作者 ---------- */
@@ -247,6 +253,12 @@ canvas.depth{height:120px}
 .sw-row input:checked+i::after{transform:translateX(18px);background:#fff}
 .vol-row input{flex:1;accent-color:#fbbf24}
 .ap-note{font-size:11px;color:var(--mut);line-height:1.6;margin-top:6px}
+/* 顶栏放不下时（由 JS 按实际宽度判断，适配中英文）：币种切换换到第二行；再放不下则作者徽章移到标题下方 */
+.topbar.stack{grid-template-columns:auto auto;grid-template-areas:"brand controls" "tabs tabs"}
+.topbar.stack .brand-wrap{grid-area:brand}.topbar.stack .controls{grid-area:controls}.topbar.stack .coin-tabs{grid-area:tabs;justify-self:stretch}
+.topbar.stack .coin-tabs button{flex:1;justify-content:center}
+.topbar.stack2 .brand-wrap{flex-direction:column;align-items:flex-start;gap:7px}
+.topbar.stack2 .by-badge{padding:4px 10px;margin-left:50px}
 @media (max-width:1100px){
   .topbar{grid-template-columns:auto auto;grid-template-areas:"brand controls" "tabs tabs"}
   .brand-wrap{grid-area:brand}.controls{grid-area:controls}.coin-tabs{grid-area:tabs;justify-self:stretch}
@@ -290,3 +302,16 @@ canvas.depth{height:120px}
   .by-badge{margin-left:42px}
 }
 @media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;animation-iteration-count:1!important}}
+/* 英文副标题更长：收紧字距 */
+html[lang=en] .wm-cn{letter-spacing:.04em;font-size:15px}
+@media (max-width:640px){html[lang=en] .wm-cn{font-size:12px;letter-spacing:.02em}}
+@media (max-width:380px){html[lang=en] .wm-cn{font-size:11px}}
+/* 手机：语言切换只显示另一种语言（点一下即切换），给标题留出空间 */
+@media (max-width:640px){
+  .lang-tog button.on{display:none}
+  .lang-tog button{padding:0 10px}
+  .controls select{max-width:56px;padding:0 4px}
+  .status{max-width:24px;padding:7px 6px}
+  .wm-cn{letter-spacing:.04em}
+}
+@media (max-width:380px){ .wm-tag{display:none} }

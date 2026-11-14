@@ -11,7 +11,7 @@
 <meta property="og:type" content="website" />
 <meta property="og:site_name" content="Crypto War · 多空战场" />
 <meta property="og:title" content="Crypto War · 多空战场 ⚔️ 蓝军(多) vs 红军(空)" />
-<meta property="og:description" content="BTC / ETH 实时价格 + 挂单/吃单多空对决动画战场。大单开炮，巨鲸空袭。by 大橙子 @0xVeryBigOrange" />
+<meta property="og:description" content="BTC / ETH 实时价格 + 挂单/吃单多空对决动画战场。大单开炮，巨鲸空袭。Live BTC/ETH bulls vs bears battle. by 大橙子 @0xVeryBigOrange" />
 <meta property="og:url" content="https://0xverybigorange.github.io/btc-battle/" />
 <meta property="og:image" content="https://0xverybigorange.github.io/btc-battle/og.png" />
 <meta property="og:image:width" content="1200" />
@@ -29,7 +29,7 @@
 <!-- 网页字体异步加载，不阻塞渲染；加载失败时使用系统字体 -->
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Ma+Shan+Zheng&family=JetBrains+Mono:wght@500;700;800&display=swap" media="print" onload="this.media='all'" />
 <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Ma+Shan+Zheng&family=JetBrains+Mono:wght@500;700;800&display=swap" /></noscript>
-<link rel="stylesheet" href="style.css?v=11302efd" />
+<link rel="stylesheet" href="style.css?v=176abc3b" />
 </head>
 <body>
 <!-- 开场 -->
@@ -38,11 +38,11 @@
   <div class="intro-inner">
     <div class="swords"><span class="sw">⚔️</span><span class="clash"></span></div>
     <div class="intro-title">CRYPTO WAR</div>
-    <div class="intro-sub">多 空 战 场</div>
+    <div class="intro-sub" data-i18n="introSub">多 空 战 场</div>
     <div class="intro-bar"><i id="introBar"></i></div>
     <div class="intro-msg" id="introMsg">集结部队中…</div>
-    <button class="intro-go" id="introGo" type="button">⚔️ 点击进入战场 🔊</button>
-    <div class="intro-hint">实时行情驱动 · 战鼓随多空节奏变化</div>
+    <button class="intro-go" id="introGo" type="button" data-i18n="introGo">⚔️ 点击进入战场 🔊</button>
+    <div class="intro-hint" data-i18n="introHint">实时行情驱动 · 战鼓随多空节奏变化</div>
   </div>
 </div>
 
@@ -50,15 +50,15 @@
 
 <header class="topbar">
   <div class="brand-wrap">
-  <a class="brand" href="./" aria-label="Crypto War 首页">
+  <a class="brand" href="./" aria-label="Crypto War 首页" data-i18n-aria="home">
     <span class="logo"><svg viewBox="0 0 48 48" aria-hidden="true"><defs><linearGradient id="lg" x1="0" x2="1"><stop offset="0" stop-color="#60a5fa"/><stop offset="1" stop-color="#f87171"/></linearGradient></defs><path d="M10 38 L34 8 L38 10 L14 40 Z" fill="#60a5fa"/><path d="M38 38 L14 8 L10 10 L34 40 Z" fill="#f87171"/><circle cx="24" cy="24" r="5" fill="#fde68a"/></svg></span>
     <div class="wordmark">
       <div class="wm-en">CRYPTO WAR</div>
-      <div class="wm-cn">多空战场 <span class="wm-tag">LIVE</span></div>
+      <div class="wm-cn"><span data-i18n="wmCn">多空战场</span> <span class="wm-tag">LIVE</span></div>
     </div>
   </a>
-    <a class="by-badge" href="https://x.com/0xVeryBigOrange" target="_blank" rel="noopener" title="关注作者 大橙子 @0xVeryBigOrange">
-      <span class="by-by">by</span><span class="by-name">大橙子</span><span class="by-ico">🍊</span>
+    <a class="by-badge" href="https://x.com/0xVeryBigOrange" target="_blank" rel="noopener" title="关注作者 大橙子 @0xVeryBigOrange" data-i18n-title="byTitle">
+      <span class="by-by">by</span><span class="by-name" data-i18n="byName">大橙子</span><span class="by-ico">🍊</span>
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
     </a>
   </div>
@@ -70,25 +70,26 @@
   </nav>
 
   <div class="controls">
-    <div class="status" id="status"><span class="dot"></span><span id="statusText">连接中…</span></div>
-    <select id="sourceSel" aria-label="数据源">
-      <option value="auto">自动</option>
+    <div class="status" id="status"><span class="dot"></span><span id="statusText" data-i18n="connecting">连接中…</span></div>
+    <select id="sourceSel" aria-label="数据源" data-i18n-aria="source" data-i18n-title="source">
+      <option value="auto" data-i18n="auto">自动</option>
       <option value="binance">Binance</option>
       <option value="okx">OKX</option>
       <option value="coinbase">Coinbase</option>
     </select>
-    <button class="music-ind" id="musicInd" type="button" aria-live="polite">♪ 配乐</button>
+    <button class="music-ind" id="musicInd" type="button" aria-live="polite" data-i18n="music">♪ 配乐</button>
     <div class="audio-wrap">
-      <button id="audioBtn" class="icon-btn" title="战争配乐 / 音效" aria-label="战争配乐与音效">🔇</button>
+      <button id="audioBtn" class="icon-btn" title="战争配乐 / 音效" aria-label="战争配乐与音效" data-i18n-title="audioTitle" data-i18n-aria="audioAria">🔇</button>
       <div class="audio-pop" id="audioPop" hidden>
-        <div class="ap-title">⚔️ 战争配乐 <small>随实时战况变化</small></div>
-        <label class="sw-row"><span>🎵 音乐</span><input type="checkbox" id="musicTog" /><i></i></label>
-        <label class="sw-row"><span>💥 音效</span><input type="checkbox" id="sfxTog" /><i></i></label>
-        <label class="vol-row"><span>🔊 音量</span><input type="range" id="volRange" min="0" max="100" value="70" /></label>
-        <div class="ap-note">太鼓 + 铜管实时合成，全部由行情驱动：成交越快鼓点越快（BPM）；价格每跳一下弹一个音，涨则上行、跌则下行；1 分钟涨跌决定明暗调；每笔大单一声炮响；总攻、胜利、巨鲸各有专属音效。切到后台自动暂停。</div>
+        <div class="ap-title" data-i18n-html="apTitle">⚔️ 战争配乐 <small>随实时战况变化</small></div>
+        <label class="sw-row"><span data-i18n="apMusic">🎵 音乐</span><input type="checkbox" id="musicTog" /><i></i></label>
+        <label class="sw-row"><span data-i18n="apSfx">💥 音效</span><input type="checkbox" id="sfxTog" /><i></i></label>
+        <label class="vol-row"><span data-i18n="apVol">🔊 音量</span><input type="range" id="volRange" min="0" max="100" value="70" /></label>
+        <div class="ap-note" data-i18n="apNote">太鼓 + 铜管实时合成，全部由行情驱动：成交越快鼓点越快（BPM）；价格每跳一下弹一个音，涨则上行、跌则下行；1 分钟涨跌决定明暗调；每笔大单一声炮响；总攻、胜利、巨鲸各有专属音效。切到后台自动暂停。</div>
       </div>
     </div>
-    <a class="icon-btn x-btn" href="https://x.com/0xVeryBigOrange" target="_blank" rel="noopener" title="关注 @0xVeryBigOrange" aria-label="X / Twitter">
+    <div class="lang-tog" role="group" aria-label="Language" data-i18n-title="langTitle"><button type="button" data-lang="zh">中</button><button type="button" data-lang="en">EN</button></div>
+    <a class="icon-btn x-btn" href="https://x.com/0xVeryBigOrange" target="_blank" rel="noopener" title="关注 @0xVeryBigOrange" aria-label="X / Twitter" data-i18n-title="followX">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
     </a>
   </div>
@@ -104,56 +105,56 @@
       <div class="price" id="price">--</div>
       <div class="price-meta">
         <span id="chg" class="chg">--</span>
-        <span>高 <b id="hi">--</b></span>
-        <span>低 <b id="lo">--</b></span>
-        <span>24h 量 <b id="vol">--</b></span>
+        <span><span data-i18n="hi">高</span> <b id="hi">--</b></span>
+        <span><span data-i18n="lo">低</span> <b id="lo">--</b></span>
+        <span><span data-i18n="vol24">24h 量</span> <b id="vol">--</b></span>
       </div>
     </div>
     <div class="power">
       <div class="power-labels">
-        <span class="c-blue pl"><i class="pl-flag blue">多</i><span>蓝军<span class="sm-hide">战力</span></span> <span><b id="bluePow">50</b>%</span></span>
+        <span class="c-blue pl"><i class="pl-flag blue" data-i18n="flagL">多</i><span><span data-i18n="blue">蓝军</span><span class="sm-hide" data-i18n="power">战力</span></span> <span><b id="bluePow">50</b>%</span></span>
         <span id="battleState" class="state">⚖️ 两军对峙</span>
-        <span class="c-red pl pr"><span><b id="redPow">50</b>%</span> <span>红军<span class="sm-hide">战力</span></span><i class="pl-flag red">空</i></span>
+        <span class="c-red pl pr"><span><b id="redPow">50</b>%</span> <span><span data-i18n="red">红军</span><span class="sm-hide" data-i18n="power">战力</span></span><i class="pl-flag red" data-i18n="flagS">空</i></span>
       </div>
       <div class="power-bar" id="powerBar">
         <div class="pb-blue" id="pbBlue"></div><div class="pb-red" id="pbRed"></div>
         <div class="pb-clash" id="pbClash"></div>
       </div>
-      <div class="power-foot"><span id="basis" title="战力 = 价格涨跌 50%（10秒 + 1分钟）+ 吃单 30%（10秒 + 1分钟）+ ±0.5% 挂单 20%">战况依据：等待数据…</span><span id="streak"></span></div>
+      <div class="power-foot"><span id="basis" data-i18n-title="basisTitle" title="战力 = 价格涨跌 50%（10秒 + 1分钟）+ 吃单 30%（10秒 + 1分钟）+ ±0.5% 挂单 20%">战况依据：等待数据…</span><span id="streak"></span></div>
     </div>
   </section>
 
   <section class="card battle-card">
     <canvas id="battle"></canvas>
     <div class="banner" id="banner"></div>
-    <div class="hud-l"><span class="flag blue">多</span><span>蓝军 · 买方</span></div>
-    <div class="hud-r"><span>卖方 · 红军</span><span class="flag red">空</span></div>
+    <div class="hud-l"><span class="flag blue" data-i18n="flagL">多</span><span data-i18n="hudL">蓝军 · 买方</span></div>
+    <div class="hud-r"><span data-i18n="hudR">卖方 · 红军</span><span class="flag red" data-i18n="flagS">空</span></div>
     <div class="legend" id="legend"></div>
   </section>
 
   <section class="card taker-card">
-    <h2><span class="h-ico">⚡</span> 吃单 <small>主动成交 · 谁在冲锋</small></h2>
+    <h2><span class="h-ico">⚡</span> <span data-i18n="taker">吃单</span> <small data-i18n="takerSub">主动成交 · 谁在冲锋</small></h2>
     <div class="ratio-block">
-      <div class="rb-head"><span>10 秒</span><span class="rb-pct" id="tk10pct">--</span></div>
+      <div class="rb-head"><span data-i18n="w10">10 秒</span><span class="rb-pct" id="tk10pct">--</span></div>
       <div class="ratio-bar"><i class="rb-b" id="tk10b"></i><i class="rb-r" id="tk10r"></i></div>
       <div class="rb-foot"><span class="c-blue" id="tk10buy">--</span><span class="c-red" id="tk10sell">--</span></div>
     </div>
     <div class="ratio-block">
-      <div class="rb-head"><span>1 分钟</span><span class="rb-pct" id="tk60pct">--</span></div>
+      <div class="rb-head"><span data-i18n="w60">1 分钟</span><span class="rb-pct" id="tk60pct">--</span></div>
       <div class="ratio-bar"><i class="rb-b" id="tk60b"></i><i class="rb-r" id="tk60r"></i></div>
       <div class="rb-foot"><span class="c-blue" id="tk60buy">--</span><span class="c-red" id="tk60sell">--</span></div>
     </div>
     <div class="ratio-block">
-      <div class="rb-head"><span>5 分钟</span><span class="rb-pct" id="tk300pct">--</span></div>
+      <div class="rb-head"><span data-i18n="w300">5 分钟</span><span class="rb-pct" id="tk300pct">--</span></div>
       <div class="ratio-bar"><i class="rb-b" id="tk300b"></i><i class="rb-r" id="tk300r"></i></div>
       <div class="rb-foot"><span class="c-blue" id="tk300buy">--</span><span class="c-red" id="tk300sell">--</span></div>
     </div>
-    <div class="delta">5 分钟净主动买入 <b id="delta">--</b></div>
+    <div class="delta"><span data-i18n="delta">5 分钟净主动买入</span> <b id="delta">--</b></div>
     <canvas id="flowChart" class="mini"></canvas>
   </section>
 
   <section class="card book-card">
-    <h2><span class="h-ico">🛡️</span> 挂单 <small>盘口深度 · 谁的城墙厚</small></h2>
+    <h2><span class="h-ico">🛡️</span> <span data-i18n="book">挂单</span> <small data-i18n="bookSub">盘口深度 · 谁的城墙厚</small></h2>
     <div class="ratio-block">
       <div class="rb-head"><span>±0.5%</span><span class="rb-pct" id="bk05pct">--</span></div>
       <div class="ratio-bar"><i class="rb-b" id="bk05b"></i><i class="rb-r" id="bk05r"></i></div>
@@ -164,16 +165,17 @@
       <div class="ratio-bar"><i class="rb-b" id="bk1b"></i><i class="rb-r" id="bk1r"></i></div>
       <div class="rb-foot"><span class="c-blue" id="bk1bid">--</span><span class="c-red" id="bk1ask">--</span></div>
     </div>
-    <div class="spread">买一 <b class="c-blue" id="bb">--</b> · 卖一 <b class="c-red" id="ba">--</b> · 价差 <b id="spr">--</b></div>
+    <div class="spread"><span data-i18n="bb">买一</span> <b class="c-blue" id="bb">--</b> · <span data-i18n="ba">卖一</span> <b class="c-red" id="ba">--</b> · <span data-i18n="spr">价差</span> <b id="spr">--</b></div>
     <canvas id="depthChart" class="mini depth"></canvas>
   </section>
 
   <section class="card trades-card">
-    <h2><span class="h-ico">💥</span> 大单战报
-      <span class="chips" id="chips"></span>
+    <h2><span class="h-ico">💥</span> <span data-i18n="trades">大单战报</span>
+      <span class="chips" id="chips" data-i18n-title="thTitle"></span>
     </h2>
-    <div class="trades-head"><span>时间</span><span>方向</span><span>价格</span><span>数量</span><span>金额</span></div>
+    <div class="trades-head"><span data-i18n="hTime">时间</span><span data-i18n="hSide">方向</span><span data-i18n="hPx">价格</span><span data-i18n="hQty">数量</span><span data-i18n="hUsd">金额</span></div>
     <ul class="trades" id="trades"></ul>
+    <div class="trades-note" id="tradesNote"></div>
   </section>
 </main>
 
@@ -182,7 +184,7 @@
     <div class="avatar">🍊</div>
     <div class="au-txt">
       <div class="au-name">大橙子 <span>Big Orange</span></div>
-      <div class="au-sub">Crypto War · 多空战场 作者</div>
+      <div class="au-sub" data-i18n="auSub">Crypto War · 多空战场 作者</div>
     </div>
     <div class="au-links">
       <a class="au-btn x" href="https://x.com/0xVeryBigOrange" target="_blank" rel="noopener">
@@ -190,11 +192,11 @@
         @0xVeryBigOrange</a>
       <a class="au-btn gh" href="https://github.com/0xVeryBigOrange/btc-battle" target="_blank" rel="noopener">
         <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
-        GitHub 源码</a>
+        <span data-i18n="ghSrc">GitHub 源码</span></a>
     </div>
   </div>
-  <p class="disclaimer">数据来自 Binance / OKX / Coinbase 公共行情（无需 API Key），仅供娱乐参考，不构成投资建议 · 蓝 = 多 / 买方，红 = 空 / 卖方</p>
+  <p class="disclaimer" data-i18n="disclaimer">数据来自 Binance / OKX / Coinbase 公共行情（无需 API Key），仅供娱乐参考，不构成投资建议 · 蓝 = 多 / 买方，红 = 空 / 卖方</p>
 </footer>
-<script type="module" src="js/app.js?v=11302efd"></script>
+<script type="module" src="js/app.js?v=176abc3b"></script>
 </body>
 </html>

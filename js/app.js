@@ -1,6 +1,7 @@
-import { FeedManager, SOURCES, COINS, fetchMiniTickers, fetchBinance1s } from './feeds.js?v=11302efd';
-import { Battle, fmtUsd } from './battle.js?v=11302efd';
-import { AudioController } from './music.js?v=11302efd';
+import { FeedManager, SOURCES, COINS, fetchMiniTickers, fetchBinance1s, fetchBinanceAggTrades } from './feeds.js?v=176abc3b';
+import { Battle } from './battle.js?v=176abc3b';
+import { t as T, lang, setLang, onLang, applyI18n, fmtUsd, fmtShort } from './i18n.js?v=176abc3b';
+import { AudioController } from './music.js?v=176abc3b';
 
 const $ = (id) => document.getElementById(id);
 const pad = (n) => String(n).padStart(2, '0');
@@ -16,29 +17,31 @@ if (!COINS[coin]) coin = 'btc';
 const cfg = () => COIN_CFG[coin];
 const fmtP = (p) => p.toLocaleString('en-US', { minimumFractionDigits: cfg().dp, maximumFractionDigits: cfg().dp });
 const fmtQ = (q) => q >= 1000 ? q.toFixed(0) : q >= 100 ? q.toFixed(1) : q >= 10 ? q.toFixed(2) : q.toFixed(cfg().qdp);
-const wan = (v) => v >= 1e4 ? +(v / 1e4).toFixed(1) + '万' : Math.round(v).toLocaleString();
+const wan = (v) => fmtShort(v);
+applyI18n();
 
 // ---------- 开场 ----------
 const intro = $('intro'), introBar = $('introBar'), introMsg = $('introMsg');
 const introStart = performance.now(); let introDone = false;
 intro.classList.add('js'); // JS 已接管：取消 CSS 兜底自动隐藏，改为“点击进入战场”
-function introStep(pct, msg) { if (introDone) return; introBar.style.width = pct + '%'; if (msg) introMsg.textContent = msg; }
+let introKey = ['introGather'];
+function introStep(pct, key, ...a) { if (introDone) return; introBar.style.width = pct + '%'; if (key) { introKey = [key, ...a]; introMsg.textContent = T(key, ...a); } }
 function finishIntro() {
   if (introDone) return;
   const wait = Math.max(0, 1900 - (performance.now() - introStart));
-  introStep(100, '⚔️ 战斗开始！');
+  introStep(100, 'introStart');
   introDone = true;
   setTimeout(() => {
     // 浏览器已允许播放 / 用户关了声音 → 直接进入；否则显示“点击进入战场”按钮（点击即解锁音频）
     if (!audio.locked) return closeIntro();
-    intro.classList.add('ready'); introMsg.textContent = '战鼓已备好 · 点击开战';
+    intro.classList.add('ready'); introKey = ['introClick']; introMsg.textContent = T('introClick');
   }, wait + 350);
 }
 function closeIntro() {
   if (!intro.isConnected || intro.classList.contains('done')) return;
   intro.classList.add('done'); setTimeout(() => intro.remove(), 900);
 }
-introStep(15, '集结部队中…');
+introStep(15, 'introGather');
 setTimeout(finishIntro, 7000); // 最长等待
 
 // ---------- 战场 ----------
@@ -46,6 +49,7 @@ const battle = new Battle($('battle'));
 battle.start();
 window.__battle = battle; // 调试用
 window.__cw = () => S.dbg;
+window.__big = () => ({ big: S.big, from: S.bigFrom, th: S.threshold });
 
 // ---------- 状态 ----------
 const S = {
@@ -53,6 +57,7 @@ const S = {
   buckets: new Array(300).fill(null).map(() => ({ sec: 0, b: 0, s: 0, bu: 0, su: 0, n: 0 })),
   px: new Array(120).fill(null).map(() => ({ sec: 0, p: 0 })), tickDir: 0,
   book: null, threshold: 0, surge: null, surgeSince: 0, wonFor: null,
+  big: [], bigFrom: 0, bigLoading: false, lastAggId: 0,
   since: 0, liveSec: null, bfGen: 0, // since: 统计窗口最早的完整秒；liveSec: 本次连接首笔实时成交所在秒
 };
 function resetStats() {
@@ -63,7 +68,8 @@ function resetStats() {
   S.since = 0; S.liveSec = null; S.bfGen++;
   $('price').textContent = '--'; $('chg').textContent = '--'; $('chg').className = 'chg';
   ['hi', 'lo', 'vol'].forEach(id => $(id).textContent = '--');
-  $('trades').innerHTML = '<li class="empty">等待大单出现…</li>';
+  S.big = []; S.bigFrom = 0; S.bigLoading = false; S.lastAggId = 0; pend = null; clearTimeout(pendTimer);
+  renderTrades();
 }
 function bucket(sec) {
   const b = S.buckets[sec % 300];
@@ -98,31 +104,79 @@ function onTrade(t, src) {
   S.tradesThisSec++;
   const sec = Math.floor(Date.now() / 1000), bk = bucket(sec), usd = t.price * t.qty;
   if (!S.since) S.since = sec;
-  if (S.liveSec == null) { S.liveSec = sec; if (src === 'binance') setTimeout(backfill, 1500, S.bfGen, t.ts, Date.now() - t.ts, sec); }
+  if (S.liveSec == null) {
+    S.liveSec = sec; if (!S.bigFrom) S.bigFrom = Date.now();
+    if (src === 'binance') {
+      setTimeout(backfill, 1500, S.bfGen, t.ts, Date.now() - t.ts, sec);
+      if (t.id) { S.bigLoading = !S.big.length; backfillBig(S.bfGen, t.id, S.lastAggId); if (S.bigLoading) renderTrades(); }
+    }
+  }
+  if (t.id) S.lastAggId = t.id;
   if (t.side === 'buy') { bk.b += t.qty; bk.bu += usd; } else { bk.s += t.qty; bk.su += usd; }
   bk.n++;
   if (S.last && t.price !== S.last) { S.tickDir = t.price > S.last ? 1 : -1; audio.tick(S.tickDir); } // 价格每跳一下 → 旋律走一步
   S.last = t.price;
   const ph = S.px[sec % 120]; ph.sec = sec; ph.p = t.price; // 每秒最后成交价
-  if (pend && pend.side === t.side && Math.abs(pend.ts - t.ts) <= 5) { pend.qty += t.qty; pend.usd += usd; pend.price = t.price; }
+  // 一笔主动单吃掉多个价位时，交易所会拆成多条同一毫秒、同方向的成交 → 合并成一笔（价格取成交均价）
+  if (pend && pend.side === t.side && pend.ts === t.ts) { pend.qty += t.qty; pend.usd += usd; pend.price = pend.usd / pend.qty; }
   else { flushPend(); pend = { ...t, usd }; pendTimer = setTimeout(flushPend, 80); }
 }
 function onMergedTrade(t) {
   battle.fire(t.side, t.usd, t.qty);
-  if (t.usd >= S.threshold) addTradeRow(t);
+  if (t.usd >= cfg().chips[0]) {
+    const r = { ts: t.ts || Date.now(), side: t.side, price: t.price, qty: t.qty, usd: t.usd };
+    S.big.unshift(r); if (S.big.length > 500) S.big.length = 500;
+    if (t.usd >= S.threshold) addTradeRow(r);
+  }
   if (t.usd >= cfg().th.shell) audio.impact(t.usd * 50000 / cfg().th.shell, t.side === 'buy' ? 'blue' : 'red');
+}
+function tradeLi(t, anim = true) {
+  const li = document.createElement('li'), d = new Date(t.ts), whale = t.usd >= cfg().th.whale;
+  if (!anim) li.style.animation = 'none';
+  li.className = (t.side === 'buy' ? 'buy' : 'sell') + (whale ? ' whale' : '');
+  li.style.setProperty('--a', Math.min(0.08 + Math.log10(t.usd / S.threshold + 1) * 0.25, 0.45).toFixed(2));
+  li.innerHTML = `<span>${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}</span>` +
+    `<span class="s">${t.side === 'buy' ? T('sideBuy') : T('sideSell')}</span><span>${fmtP(t.price)}</span>` +
+    `<span>${fmtQ(t.qty)}</span><span>${whale ? '🐋 ' : ''}${fmtUsd(t.usd)}</span>`;
+  return li;
 }
 function addTradeRow(t) {
   const ul = $('trades');
   const empty = ul.querySelector('.empty'); if (empty) empty.remove();
-  const li = document.createElement('li'), d = new Date(), whale = t.usd >= cfg().th.whale;
-  li.className = (t.side === 'buy' ? 'buy' : 'sell') + (whale ? ' whale' : '');
-  li.style.setProperty('--a', Math.min(0.08 + Math.log10(t.usd / S.threshold + 1) * 0.25, 0.45).toFixed(2));
-  li.innerHTML = `<span>${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}</span>` +
-    `<span class="s">${t.side === 'buy' ? '多 买' : '空 卖'}</span><span>${fmtP(t.price)}</span>` +
-    `<span>${fmtQ(t.qty)}</span><span>${whale ? '🐋 ' : ''}${fmtUsd(t.usd)}</span>`;
-  ul.prepend(li);
+  ul.prepend(tradeLi(t));
   while (ul.children.length > 60) ul.lastChild.remove();
+  tradesNote();
+}
+const bigMins = () => Math.max(1, Math.round((Date.now() - S.bigFrom) / 60000));
+function tradesNote() { $('tradesNote').textContent = S.bigFrom && !S.bigLoading ? T('bigSince', bigMins()) : ''; }
+// 按当前门槛整表重绘（切换门槛 / 回填完成 / 切换语言时）
+function renderTrades() {
+  const ul = $('trades'), rows = S.big.filter(x => x.usd >= S.threshold).slice(0, 60);
+  ul.innerHTML = '';
+  if (!rows.length) {
+    const msg = S.bigLoading ? T('loadingBig') : S.bigFrom ? T('noBig', bigMins(), fmtShort(S.threshold)) : T('waitBig');
+    ul.innerHTML = `<li class="empty">${msg}</li>`;
+  } else for (const r of rows) ul.appendChild(tradeLi(r, false));
+  tradesNote();
+}
+// 开页时用 Binance 逐笔成交（aggTrades）回填最近约 30 分钟的大单，避免列表一打开是空的
+async function backfillBig(gen, firstId, afterId) {
+  const ms = 30 * 60000, since = Date.now() - ms;
+  const raw = await fetchBinanceAggTrades(coin, fm.binanceHost || 0, firstId, afterId ? 0 : since, afterId, 15);
+  if (gen !== S.bfGen) return;
+  S.bigLoading = false;
+  if (!raw) { renderTrades(); return; }
+  const out = []; let cur = null; // 同毫秒同方向合并
+  for (const x of raw) {
+    const side = x.m ? 'sell' : 'buy', usd = x.p * x.q;
+    if (cur && cur.ts === x.T && cur.side === side) { cur.qty += x.q; cur.usd += usd; cur.price = cur.usd / cur.qty; }
+    else { if (cur) out.push(cur); cur = { ts: x.T, side, price: x.p, qty: x.q, usd }; }
+  }
+  if (cur) out.push(cur);
+  const min = cfg().chips[0], old = out.filter(x => x.usd >= min).reverse();
+  S.big = S.big.concat(old).sort((a, b) => b.ts - a.ts).slice(0, 500);
+  if (!afterId && raw.length) S.bigFrom = Math.min(S.bigFrom || Infinity, raw[0].T);
+  renderTrades();
 }
 
 // 开页/重连时用 Binance 1 秒 K 线回填之前的成交（主动买卖量与每秒收盘价），
@@ -144,15 +198,22 @@ async function backfill(gen, firstTs, skew, liveSec) {
 
 // ---------- 数据源 ----------
 const statusEl = $('status');
+let lastStatus = null;
+function statusText() {
+  if (!lastStatus) return;
+  const [state, label, src] = lastStatus;
+  const lb = state === 'error' ? (T(label) || label) : label;
+  const txt = { connecting: T('sConnecting', lb), open: T('sOpen', lb), live: T('sLive', lb), error: T('sError', SOURCES[src].name, lb) }[state];
+  $('statusText').textContent = txt; statusEl.title = txt;
+}
 const fm = new FeedManager({
   onStatus(state, label, src) {
     statusEl.className = 'status ' + state;
-    const txt = { connecting: `正在连接 ${label}…`, open: `已连接 ${label}，等待数据…`, live: `实时 · ${label}`, error: `${SOURCES[src].name} ${label}，重试/切换中…` }[state];
-    $('statusText').textContent = txt; statusEl.title = txt;
+    lastStatus = [state, label, src]; statusText();
     if (state === 'connecting' || state === 'open') S.liveSec = null; // 新连接 → 首笔成交后重新回填断线期间
-    if (state === 'connecting') introStep(40, `连接战场情报 · ${label}…`);
-    if (state === 'open') introStep(65, '侦察敌情中…');
-    if (state === 'live') { introStep(90, '部队就位'); finishIntro(); }
+    if (state === 'connecting') introStep(40, 'introConn', label);
+    if (state === 'open') introStep(65, 'introScout');
+    if (state === 'live') { introStep(90, 'introReady'); finishIntro(); }
     if (src !== S.src) { if (S.src) resetStats(); S.src = src; }
     $('pair').textContent = `${COINS[coin]}/${SOURCES[src].quote} · ${SOURCES[src].name}`;
   },
@@ -178,9 +239,10 @@ function renderChips() {
   for (const b of document.querySelectorAll('#chips button')) b.onclick = () => {
     S.threshold = +b.dataset.v; localStorage.setItem('cw_th_' + coin, S.threshold);
     document.querySelectorAll('#chips button').forEach(x => x.classList.toggle('on', x === b));
+    renderTrades();
   };
   const th = cfg().th;
-  $('legend').textContent = `小兵 = 成交 · 炮弹 ≥ $${wan(th.shell)} · 重炮 ≥ $${wan(th.heavy)} · 🐋 空袭 ≥ $${wan(th.whale)}`;
+  $('legend').textContent = T('legend', wan(th.shell), wan(th.heavy), wan(th.whale));
 }
 function setCoin(c, first = false) {
   if (!first && c === coin) return;
@@ -189,7 +251,7 @@ function setCoin(c, first = false) {
   tabs.forEach(b => { b.classList.toggle('on', b.dataset.coin === c); b.setAttribute('aria-selected', b.dataset.coin === c); });
   moveInd();
   battle.setThresholds(cfg().th);
-  if (!first) { battle.reset(); showBanner(`⚔️ 转战 ${COINS[c]} 战场`, 'gold', 1600, true); }
+  if (!first) { battle.reset(); showBanner(T('toCoin', COINS[c]), 'gold', 1600, true); }
   renderChips(); resetStats(); S.src = null;
   fm.start(sel.value, c);
 }
@@ -232,7 +294,7 @@ setInterval(() => {
     clearTimeout(flashT); flashT = setTimeout(() => priceEl.classList.remove('up', 'down'), 650);
   }
   renderPrice(str, S.shownStr); S.shownStr = str; lastShown = S.last;
-  document.title = `${str} ${COINS[coin]} · Crypto War 多空战场`;
+  document.title = T('title', `${str} ${COINS[coin]}`);
   let ch = null;
   if (S.open24h) {
     ch = (S.last / S.open24h - 1) * 100; const el = $('chg');
@@ -241,7 +303,9 @@ setInterval(() => {
   setMini(coin, S.last, ch);
   if (S.hi) { $('hi').textContent = fmtP(S.hi); $('lo').textContent = fmtP(S.lo); $('vol').textContent = Math.round(S.vol).toLocaleString() + ' ' + COINS[coin]; }
 }, 100);
-setInterval(() => { $('tps').textContent = S.tradesThisSec + ' 笔/秒'; S.tradesThisSec = 0; }, 1000);
+setInterval(() => { $('tps').textContent = T('tps', S.tradesThisSec); S.tradesThisSec = 0;
+  if ($('trades').querySelector('.empty')) renderTrades(); else tradesNote(); // 提示里的分钟数随时间更新
+}, 1000);
 
 // ---------- 数字补间 ----------
 const tweens = new Map();
@@ -316,11 +380,11 @@ function drawFlow() {
   x.strokeStyle = '#fbbf24'; x.lineWidth = 1.8; x.shadowColor = '#fbbf24'; x.shadowBlur = 6; x.beginPath();
   cumPts.forEach((c, i) => { const y = mid - (c / cm) * (mid - 6); i ? x.lineTo(i * bw + bw / 2, y) : x.moveTo(bw / 2, y); });
   x.stroke(); x.shadowBlur = 0;
-  x.fillStyle = 'rgba(230,235,255,.5)'; x.font = '10px -apple-system, "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif'; x.fillText('近 2 分钟 主动买(上) / 卖(下) · 黄线=累计净额', 6, 12);
+  x.fillStyle = 'rgba(230,235,255,.5)'; x.font = '10px -apple-system, "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif'; x.fillText(T('flowCap'), 6, 12);
 }
 function drawDepth(d) {
   const [x, W, H] = prepCanvas($('depthChart'));
-  if (!d) { x.fillStyle = 'rgba(230,235,255,.5)'; x.font = '12px -apple-system, "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif'; x.fillText('等待盘口数据…', 10, 20); return; }
+  if (!d) { x.fillStyle = 'rgba(230,235,255,.5)'; x.font = '12px -apple-system, "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif'; x.fillText(T('depthWait'), 10, 20); return; }
   const NB = d.bins.bid.length; let cb = 0, ca = 0; const cbA = [], caA = [];
   for (let i = 0; i < NB; i++) { cb += d.bins.bid[i]; ca += d.bins.ask[i]; cbA.push(cb); caA.push(ca); }
   const mx = Math.max(cb, ca, 1), mid = W / 2, base = H - 14;
@@ -338,8 +402,8 @@ function drawDepth(d) {
   x.fillStyle = 'rgba(230,235,255,.55)'; x.font = '10px "JetBrains Mono", monospace';
   x.textAlign = 'left'; x.fillText('-1%', 2, H - 3); x.textAlign = 'right'; x.fillText('+1%', W - 2, H - 3);
   x.textAlign = 'center'; x.fillText(fmtP(d.mid), mid, H - 3);
-  x.textAlign = 'left'; x.fillText('买盘城墙 ' + fmtUsd(cb), 4, 11); x.textAlign = 'right'; x.fillText('卖盘城墙 ' + fmtUsd(ca), W - 4, 11);
-  if (d.cover < 0.0099) { x.textAlign = 'center'; x.fillStyle = 'rgba(251,191,36,.7)'; x.fillText(`该数据源深度覆盖约 ±${(d.cover * 100).toFixed(2)}%`, mid, 24); }
+  x.textAlign = 'left'; x.fillText(T('wallB') + fmtUsd(cb), 4, 11); x.textAlign = 'right'; x.fillText(T('wallA') + fmtUsd(ca), W - 4, 11);
+  if (d.cover < 0.0099) { x.textAlign = 'center'; x.fillStyle = 'rgba(251,191,36,.7)'; x.fillText(T('depthCover', (d.cover * 100).toFixed(2)), mid, 24); }
 }
 
 // ---------- 横幅 ----------
@@ -351,7 +415,7 @@ function showBanner(html, cls, ms = 2200, force = false) {
   void banner.offsetWidth; banner.classList.add('show');
   clearTimeout(bannerT); bannerT = setTimeout(() => banner.classList.remove('show'), ms);
 }
-battle.onWhale = (side, usd) => (audio.whale(side), showBanner(`🐋 ${side === 'blue' ? '蓝军' : '红军'}巨鲸空袭<small>${side === 'blue' ? '主动买入' : '主动卖出'} ${fmtUsd(usd)}</small>`, side, 2600, true));
+battle.onWhale = (side, usd) => (audio.whale(side), showBanner(T('whale', side === 'blue', fmtUsd(usd)), side, 2600, true));
 
 // ---------- 战力 & 刷新 ----------
 let smoothS = 0, musicI = 0.15, musicBpm = 80, musicMood = 0;
@@ -362,10 +426,10 @@ function refresh() {
   const f = (q, u) => `${fmtQ(q)} ${C} · ${fmtUsd(u)}`;
   // 窗口还没攒满（非 Binance 源无法回填历史 / 回填未完成）时如实标注已统计的秒数
   const cov = S.since ? Math.floor(Date.now() / 1000) - S.since + 1 : 0;
-  const nt = (n) => cov < n ? `仅${cov}秒` : '';
-  const i10 = setRatio('tk10', w10.bu, w10.su, 'buy', 'sell', '买 ' + f(w10.b, w10.bu), '卖 ' + f(w10.s, w10.su), nt(10));
-  const i60 = setRatio('tk60', w60.bu, w60.su, 'buy', 'sell', '买 ' + f(w60.b, w60.bu), '卖 ' + f(w60.s, w60.su), nt(60));
-  setRatio('tk300', w300.bu, w300.su, 'buy', 'sell', '买 ' + f(w300.b, w300.bu), '卖 ' + f(w300.s, w300.su), nt(300));
+  const nt = (n) => cov < n ? T('only', cov) : '';
+  const i10 = setRatio('tk10', w10.bu, w10.su, 'buy', 'sell', T('buy') + ' ' + f(w10.b, w10.bu), T('sell') + ' ' + f(w10.s, w10.su), nt(10));
+  const i60 = setRatio('tk60', w60.bu, w60.su, 'buy', 'sell', T('buy') + ' ' + f(w60.b, w60.bu), T('sell') + ' ' + f(w60.s, w60.su), nt(60));
+  setRatio('tk300', w300.bu, w300.su, 'buy', 'sell', T('buy') + ' ' + f(w300.b, w300.bu), T('sell') + ' ' + f(w300.s, w300.su), nt(300));
   const dl = w300.bu - w300.su, de = $('delta');
   const dq = w300.b - w300.s;
   de.textContent = (dl >= 0 ? '+' : '-') + fmtUsd(Math.abs(dl)) + ` (${dq >= 0 ? '+' : '-'}${fmtQ(Math.abs(dq))} ${C})`;
@@ -373,9 +437,9 @@ function refresh() {
 
   const d = computeDepth(); let ib = 0;
   if (d) {
-    const cv = (r) => d.cover < r ? `仅覆盖±${(d.cover * 100).toFixed(2)}%` : ''; // 如 Coinbase 公共频道只给前 50 档
-    ib = setRatio('bk05', d.b05, d.a05, 'bid', 'ask', '买盘 ' + fmtUsd(d.b05), '卖盘 ' + fmtUsd(d.a05), cv(0.0049));
-    setRatio('bk1', d.b1, d.a1, 'bid', 'ask', '买盘 ' + fmtUsd(d.b1), '卖盘 ' + fmtUsd(d.a1), cv(0.0099));
+    const cv = (r) => d.cover < r ? T('cover', (d.cover * 100).toFixed(2)) : ''; // 如 Coinbase 公共频道只给前 50 档
+    ib = setRatio('bk05', d.b05, d.a05, 'bid', 'ask', T('bid') + ' ' + fmtUsd(d.b05), T('ask') + ' ' + fmtUsd(d.a05), cv(0.0049));
+    setRatio('bk1', d.b1, d.a1, 'bid', 'ask', T('bid') + ' ' + fmtUsd(d.b1), T('ask') + ' ' + fmtUsd(d.a1), cv(0.0099));
     $('bb').textContent = fmtP(d.bb); $('ba').textContent = fmtP(d.ba); $('spr').textContent = (d.ba - d.bb).toFixed(2);
   }
   drawDepth(d); drawFlow();
@@ -404,10 +468,10 @@ function refresh() {
   const pc = (v) => `<b class="${v >= 0 ? 'c-blue' : 'c-red'}">${v >= 0 ? '+' : ''}${v.toFixed(3)}%</b>`;
   const rt = (v) => { const b = Math.round((v + 1) * 50); return `<b><span class="c-blue">${b}</span>:<span class="c-red">${100 - b}</span></b>`; };
   const bi = (x) => `<span class="bi">${x}</span>`;
-  $('basis').innerHTML = '战况依据：' + [
-    `10秒 ${pc(ch10)}`, `1分钟${cov < 60 ? `(仅${cov}秒)` : ''} ${pc(ch60)}`,
-    `最新 ${S.tickDir > 0 ? '<b class="c-blue">↑</b>' : S.tickDir < 0 ? '<b class="c-red">↓</b>' : '–'}`,
-    `吃单买:卖 ${rt(i60)}`, `挂单买:卖 ${rt(ib)}`].map(bi).join(' · ');
+  $('basis').innerHTML = T('basis') + [
+    `${T('b10')} ${pc(ch10)}`, `${T('b60')}${cov < 60 ? T('bOnly', cov) : ''} ${pc(ch60)}`,
+    `${T('bLast')} ${S.tickDir > 0 ? '<b class="c-blue">↑</b>' : S.tickDir < 0 ? '<b class="c-red">↓</b>' : '–'}`,
+    `${T('bTk')} ${rt(i60)}`, `${T('bBk')} ${rt(ib)}`].map(bi).join(' · ');
   const s = smoothS, blueShare = 0.5 + 0.5 * s;
   battle.setFront(0.5 + Math.tanh(s * 1.6) * 0.5);
   const bp = Math.round(blueShare * 100);
@@ -422,20 +486,20 @@ function refresh() {
   if (surge !== S.surge) {
     S.surge = surge; S.surgeSince = Date.now(); S.wonFor = null; battle.setSurge(surge);
     if (surge) audio.surge(surge);
-    if (surge) showBanner(surge === 'blue' ? '⚔️ 蓝军发起总攻！<small>多头主动出击</small>' : '⚔️ 红军发起总攻！<small>空头主动出击</small>', surge, 2400, true);
+    if (surge) showBanner(surge === 'blue' ? T('surgeB') : T('surgeR'), surge, 2400, true);
   }
   // 胜利：持续压制
   const held = surge ? (Date.now() - S.surgeSince) / 1000 : 0;
   if (surge && held >= VICTORY_SEC && S.wonFor !== surge) {
     S.wonFor = surge; battle.celebrate(surge); audio.fanfare(surge);
-    showBanner(surge === 'blue' ? '🏆 蓝军大获全胜！<small>多头压制 ' + VICTORY_SEC + ' 秒 · 红军溃退</small>' : '🏆 红军大获全胜！<small>空头压制 ' + VICTORY_SEC + ' 秒 · 蓝军溃退</small>', surge + ' victory', 3200, true);
+    showBanner(surge === 'blue' ? T('winB', VICTORY_SEC) : T('winR', VICTORY_SEC), surge + ' victory', 3200, true);
   }
-  $('streak').textContent = surge ? `${surge === 'blue' ? '蓝军' : '红军'}已压制 ${Math.floor(held)} 秒${held < VICTORY_SEC ? '' : ' 🏆'}` : '';
+  $('streak').textContent = surge ? T('streak', surge === 'blue', Math.floor(held), held >= VICTORY_SEC) : '';
   const st = $('battleState');
-  if (surge) { st.textContent = surge === 'blue' ? '🔥 蓝军总攻' : '🔥 红军总攻'; st.className = 'state surge ' + surge; }
-  else if (s > 0.08) { st.textContent = '🔵 蓝军推进'; st.className = 'state blue'; }
-  else if (s < -0.08) { st.textContent = '🔴 红军压制'; st.className = 'state red'; }
-  else { st.textContent = '⚖️ 两军对峙'; st.className = 'state'; }
+  if (surge) { st.textContent = surge === 'blue' ? T('stSurgeB') : T('stSurgeR'); st.className = 'state surge ' + surge; }
+  else if (s > 0.08) { st.textContent = T('stBlue'); st.className = 'state blue'; }
+  else if (s < -0.08) { st.textContent = T('stRed'); st.className = 'state red'; }
+  else { st.textContent = T('stTie'); st.className = 'state'; }
 }
 setInterval(refresh, 400);
 
@@ -447,8 +511,8 @@ const AP = Object.assign({ music: true, sfx: true, vol: 75 }, JSON.parse(localSt
 const audioBtn = $('audioBtn'), pop = $('audioPop'), mInd = $('musicInd');
 $('musicTog').checked = AP.music; $('sfxTog').checked = AP.sfx; $('volRange').value = AP.vol;
 function moodLabel() {
-  if (S.surge) return S.surge === 'blue' ? '蓝军总攻' : '红军总攻';
-  return musicMood > 0.15 ? '蓝军上扬' : musicMood < -0.15 ? '红军下压' : '两军对峙';
+  if (S.surge) return S.surge === 'blue' ? T('mSurgeB') : T('mSurgeR');
+  return musicMood > 0.15 ? T('mUp') : musicMood < -0.15 ? T('mDown') : T('mTie');
 }
 function updateMusicInd() {
   const want = AP.music || AP.sfx, locked = audio.locked;
@@ -456,7 +520,7 @@ function updateMusicInd() {
   audioBtn.classList.toggle('on', want && audio.running);
   audioBtn.classList.toggle('pending', locked);
   mInd.className = 'music-ind' + (locked ? ' locked' : !want ? ' off' : '') + (!locked && want ? ' ' + (S.surge || (musicMood > 0.15 ? 'blue' : musicMood < -0.15 ? 'red' : '')) : '');
-  mInd.textContent = locked ? '🔊 点击开启战歌' : !want ? '配乐已关' : AP.music ? `♪ ${audio.bpm()} BPM · ${moodLabel()}` : `💥 音效 · ${moodLabel()}`;
+  mInd.textContent = locked ? T('mLocked') : !want ? T('mOff') : AP.music ? `♪ ${audio.bpm()} BPM · ${moodLabel()}` : `${T('mSfx')} · ${moodLabel()}`;
 }
 function saveAudio() {
   localStorage.setItem(AKEY, JSON.stringify(AP));
@@ -486,6 +550,34 @@ $('musicTog').onchange = (e) => { AP.music = e.target.checked; saveAudio(); };
 $('sfxTog').onchange = (e) => { AP.sfx = e.target.checked; saveAudio(); };
 $('volRange').oninput = (e) => { AP.vol = +e.target.value; saveAudio(); };
 updateMusicInd();
+
+// ---------- 顶栏自适应（按实际内容宽度换行，避免作者徽章盖住币种切换）----------
+const topbar = document.querySelector('.topbar');
+function fitHeader() {
+  const bw = document.querySelector('.brand-wrap'), ct = document.querySelector('.controls'), tb = $('coinTabs');
+  topbar.classList.remove('stack', 'stack2');
+  const cs = getComputedStyle(topbar), inner = topbar.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+  const gap = parseFloat(cs.columnGap) || 14;
+  const need = (el) => el.scrollWidth;
+  if (need(bw) + need(tb) + need(ct) + gap * 2 + 8 > inner) {
+    topbar.classList.add('stack');
+    if (need(bw) + need(ct) + gap + 8 > inner) topbar.classList.add('stack2');
+  }
+  moveInd();
+}
+window.addEventListener('resize', fitHeader);
+document.fonts && document.fonts.ready.then(fitHeader);
+setTimeout(fitHeader, 0); setInterval(fitHeader, 1000); // 状态/配乐指示文字长度会变
+
+// ---------- 语言切换 ----------
+document.querySelectorAll('[data-lang]').forEach(b => b.onclick = (e) => { e.stopPropagation(); setLang(b.dataset.lang); });
+onLang(() => {
+  renderChips(); renderTrades(); statusText(); updateMusicInd(); refresh();
+  if (intro.isConnected) introMsg.textContent = T(...introKey);
+  if (S.last) document.title = T('title', `$${fmtP(S.last)} ${COINS[coin]}`); else document.title = T('title');
+  requestAnimationFrame(fitHeader);
+});
+document.title = T('title');
 
 // ---------- 启动 ----------
 setCoin(coin, true);

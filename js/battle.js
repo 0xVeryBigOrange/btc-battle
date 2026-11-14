@@ -1,4 +1,5 @@
 // 战场动画：Canvas 2D，蓝军（多）在左，红军（空）在右
+import { t as tr, fmtUsd } from './i18n.js?v=176abc3b';
 const TAU = Math.PI * 2;
 const rand = (a, b) => a + Math.random() * (b - a);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -427,7 +428,7 @@ export class Battle {
         this.explode(s.x, s.y, s.side, power, { whale: s.kind === 'whale' });
         // 伤害数字
         const lvl = s.kind === 'whale' ? 3 : s.kind === 'heavy' ? 2 : 1;
-        this.texts.push({ x: s.x + rand(-10, 10), y: s.y - 24, vx: rand(-14, 14), txt: (lvl === 3 ? '暴击 ' : '-') + fmtUsd(s.usd), side: s.side, life: 1.4 + lvl * 0.3, max: 1.4 + lvl * 0.3, lvl });
+        this.texts.push({ x: s.x + rand(-10, 10), y: s.y - 24, vx: rand(-14, 14), txt: (lvl === 3 ? tr('crit') : '-') + fmtUsd(s.usd), side: s.side, life: 1.4 + lvl * 0.3, max: 1.4 + lvl * 0.3, lvl });
         if (s.kind === 'whale') { this.zoom = 1.07; this.shake = Math.max(this.shake, 22); }
       }
     }
@@ -657,7 +658,7 @@ export class Battle {
     for (let i = 10; i >= 0; i--) { const k = i / 10; ctx.lineTo(px + dir * fw * k, py - 46 + fh + Math.sin(this.t * 5 - k * 4) * 3 * k); }
     ctx.closePath(); ctx.fill();
     ctx.fillStyle = '#fff'; ctx.font = '900 15px -apple-system, "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(blue ? '多' : '空', px + dir * fw * 0.5, py - 46 + fh / 2 + Math.sin(this.t * 5 - 2) * 1.5);
+    ctx.fillText(blue ? tr('flagL') : tr('flagS'), px + dir * fw * 0.5, py - 46 + fh / 2 + Math.sin(this.t * 5 - 2) * 1.5);
   }
 
   _drawSoldier(s) {
@@ -699,8 +700,4 @@ export class Battle {
   }
 }
 
-export function fmtUsd(v) {
-  if (v >= 1e8) return '$' + (v / 1e8).toFixed(2) + '亿';
-  if (v >= 1e4) return '$' + (+(v / 1e4).toFixed(v >= 1e6 ? 0 : 1)) + '万';
-  return '$' + Math.round(v).toLocaleString();
-}
+export { fmtUsd };

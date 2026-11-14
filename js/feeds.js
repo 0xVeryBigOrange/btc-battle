@@ -99,7 +99,7 @@ function connectBinance(h, hostIdx = 0, coin = 'btc') {
     const m = JSON.parse(e.data); const s = m.stream, d = m.data;
     if (!d) return;
     if (s.endsWith('@aggTrade')) {
-      h.onTrade({ price: +d.p, qty: +d.q, side: d.m ? 'sell' : 'buy', ts: d.T });
+      h.onTrade({ price: +d.p, qty: +d.q, side: d.m ? 'sell' : 'buy', ts: d.T, id: d.a });
     } else if (s.endsWith('@depth@100ms')) {
       if (syncing || lastU == null) buffer.push(d); else applyDiff(d, false);
       if (buffer.length > 2000) buffer.splice(0, buffer.length - 2000);
@@ -219,7 +219,7 @@ export class FeedManager {
     const guard = (fn) => (...a) => { if (gen === this.gen) fn(...a); };
     const hh = {
       onOpen: guard(() => this.h.onStatus('open', label, src)),
-      onClose: guard(() => this._fail('连接断开')),
+      onClose: guard(() => this._fail('eClosed')),
       onTrade: guard((t) => { this._alive(label, src); this.h.onTrade(t, src); }),
       onTicker: guard((t) => { this._alive(label, src); this.h.onTicker(t, src); }),
       onBook: guard((b) => this.h.onBook(b, src)),
@@ -236,8 +236,8 @@ export class FeedManager {
   _check() {
     if (!this.conn) return;
     const now = Date.now();
-    if (!this.gotData && now - this.openedAt > 9000) this._fail('超时无数据');
-    else if (this.gotData && now - this.lastData > 20000) this._fail('数据中断');
+    if (!this.gotData && now - this.openedAt > 9000) this._fail('eTimeout');
+    else if (this.gotData && now - this.lastData > 20000) this._fail('eStall');
   }
   _fail(reason) {
     const gen = this.gen;
@@ -266,6 +266,25 @@ export async function fetchBinance1s(coin, hostIdx = 0, limit = 300) {
     } catch {}
   }
   return null;
+}
+
+// Binance 逐笔成交（aggTrades）：从 beforeId 往回翻页，直到早于 sinceMs、到达 afterId 或翻满 maxPages 页
+// 返回按 id 升序、id 在 (afterId, beforeId) 之间的成交 [{ id, p, q, T, m }]
+export async function fetchBinanceAggTrades(coin, hostIdx, beforeId, sinceMs, afterId = 0, maxPages = 15) {
+  const host = BINANCE_HOSTS[hostIdx].rest, S = sym.binanceRest(coin);
+  let out = [], from = Math.max(afterId + 1, beforeId - 1000);
+  try {
+    for (let i = 0; i < maxPages; i++) {
+      const lim = Math.min(1000, beforeId - from);
+      if (lim <= 0) break;
+      const a = await fetchJson(`${host}/api/v3/aggTrades?symbol=${S}&fromId=${from}&limit=${lim}`, 8000);
+      const rows = a.filter(x => x.a < beforeId && x.a > afterId).map(x => ({ id: x.a, p: +x.p, q: +x.q, T: x.T, m: x.m }));
+      out = rows.concat(out);
+      if (!a.length || from <= afterId + 1 || (sinceMs && a[0].T < sinceMs)) break;
+      beforeId = from; from = Math.max(afterId + 1, from - 1000);
+    }
+  } catch (e) { if (!out.length) return null; }
+  return sinceMs ? out.filter(x => x.T >= sinceMs) : out;
 }
 
 // 双币迷你行情（REST 轮询，独立于主连接）：返回 { btc:{last,chg}, eth:{last,chg} }
