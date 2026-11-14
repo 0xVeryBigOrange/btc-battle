@@ -1,13 +1,10 @@
+import { fetchJson, binFetch } from './net.js?v=8156c0c3';
 // 币种宇宙：Binance（USDT 现货）为主，OKX（USDT 现货）、Coinbase（USD）补充；本地缓存 + 24h 行情排序
 const UKEY = 'cw_univ_v1', UTTL = 12 * 3600e3;
 const BIN_REST = ['https://api.binance.com', 'https://data-api.binance.vision'];
 
-function fetchJson(url, ms = 10000) {
-  const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), ms);
-  return fetch(url, { signal: ctl.signal }).then(r => { clearTimeout(t); if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); });
-}
-async function binJson(path, ms) {
-  let err; for (const h of BIN_REST) { try { return await fetchJson(h + path, ms); } catch (e) { err = e; } }
+async function binJson(path, ms, w) {
+  let err; for (const h of BIN_REST) { try { return await binFetch(h + path, w, ms); } catch (e) { err = e; if (e.rate) break; } }
   throw err;
 }
 const dec = (s) => { s = String(s); if (/e-/i.test(s)) return +s.split(/e-/i)[1]; const i = s.indexOf('.'); return i < 0 ? 0 : s.slice(i + 1).replace(/0+$/, '').length; };
@@ -43,7 +40,7 @@ export function loadUniverse(force = false) {
 }
 async function refreshUniverse() {
   const [b, o, cb] = await Promise.allSettled([
-    binJson('/api/v3/exchangeInfo?symbolStatus=TRADING&showPermissionSets=false', 12000),
+    binJson('/api/v3/exchangeInfo?symbolStatus=TRADING&showPermissionSets=false', 12000, 20),
     fetchJson('https://www.okx.com/api/v5/public/instruments?instType=SPOT', 10000),
     fetchJson('https://api.exchange.coinbase.com/products', 10000),
   ]);
@@ -65,7 +62,9 @@ async function refreshUniverse() {
   const d = [...rows.values()];
   if (d.length < 50) { if (!universe.size) throw new Error('universe'); return; }
   ingest(d);
-  try { localStorage.setItem(UKEY, JSON.stringify({ t: Date.now(), d })); } catch {}
+  // 有交易所请求失败（临时故障 / 限流）时只缓存 30 分钟，避免半残的列表（比如缺了 Binance）被用上 12 小时
+  const partial = [b, o, cb].some(x => x.status !== 'fulfilled');
+  try { localStorage.setItem(UKEY, JSON.stringify({ t: partial ? Date.now() - UTTL + 30 * 60e3 : Date.now(), d })); } catch {}
 }
 function ingest(d) {
   for (const [base, bs, os, cs, dp, qdp] of d) {
@@ -85,20 +84,24 @@ export function loadTickers(force = false) {
   tickAt = Date.now();
   tickPromise = (async () => {
     await loadUniverse().catch(() => {});
-    const [b, o] = await Promise.allSettled([
-      binJson('/api/v3/ticker/24hr?type=MINI', 12000),
+    const [b, o, c] = await Promise.allSettled([
+      binJson('/api/v3/ticker/24hr?type=MINI', 12000, 80),
       fetchJson('https://www.okx.com/api/v5/market/tickers?instType=SPOT', 10000),
+      fetchJson('https://api.exchange.coinbase.com/products/stats', 10000), // 全部交易对 24h 统计（只在 Coinbase 上的币靠它显示价格）
     ]);
+    const cbs = c.status === 'fulfilled' && c.value && typeof c.value === 'object' ? c.value : {};
     const bySym = new Map();
     if (b.status === 'fulfilled') for (const t of b.value) bySym.set(t.symbol, t);
     const byInst = new Map();
     if (o.status === 'fulfilled') for (const t of o.value.data || []) byInst.set(t.instId, t);
     for (const m of universe.values()) {
-      const bt = m.binance && bySym.get(m.binance), ot = m.okx && byInst.get(m.okx);
-      m.qvB = bt ? +bt.quoteVolume : 0; m.qvO = ot ? +ot.volCcy24h : 0;
+      const bt = m.binance && bySym.get(m.binance), ot = m.okx && byInst.get(m.okx), ct = m.coinbase && cbs[m.coinbase] && cbs[m.coinbase].stats_24hour;
+      m.qvB = bt ? +bt.quoteVolume : 0; m.qvO = ot ? +ot.volCcy24h : 0; m.qvC = ct ? (+ct.volume || 0) * (+ct.last || 0) : 0;
       if (bt && +bt.lastPrice) { m.last = +bt.lastPrice; m.chg = +bt.openPrice ? (+bt.lastPrice / +bt.openPrice - 1) * 100 : 0; }
       else if (ot && +ot.last) { m.last = +ot.last; m.chg = +ot.open24h ? (+ot.last / +ot.open24h - 1) * 100 : 0; }
-      m.qv = m.qvB + m.qvO; m.qvP = m.binance ? m.qvB : m.qvO; // qvP：主数据源的成交额，用于定门槛（与直接打开链接时一致）
+      else if (ct && +ct.last) { m.last = +ct.last; m.chg = +ct.open ? (+ct.last / +ct.open - 1) * 100 : 0; }
+      m.qv = m.qvB + m.qvO + m.qvC; // 三家合计，用于搜索排序
+      m.qvP = m.binance ? m.qvB : m.okx ? m.qvO : m.qvC; // qvP：主数据源的成交额，用于定门槛（与直接打开链接时一致）
     }
     return universe;
   })();
@@ -108,7 +111,7 @@ export function loadTickers(force = false) {
 export async function fetchQuoteVolume(m) {
   try {
     const src = primarySource(m);
-    if (src === 'binance') { const t = await binJson(`/api/v3/ticker/24hr?symbol=${m.binance}&type=MINI`, 6000); return { qv: +t.quoteVolume, last: +t.lastPrice, hi: +t.highPrice, lo: +t.lowPrice }; }
+    if (src === 'binance') { const t = await binJson(`/api/v3/ticker/24hr?symbol=${m.binance}&type=MINI`, 6000, 2); return { qv: +t.quoteVolume, last: +t.lastPrice, hi: +t.highPrice, lo: +t.lowPrice }; }
     if (src === 'okx') { const j = await fetchJson(`https://www.okx.com/api/v5/market/ticker?instId=${m.okx}`, 6000); const t = j.data[0]; return { qv: +t.volCcy24h, last: +t.last, hi: +t.high24h, lo: +t.low24h }; }
     const t = await fetchJson(`https://api.exchange.coinbase.com/products/${m.coinbase}/stats`, 6000);
     return { qv: +t.volume * +t.last, last: +t.last, hi: +t.high, lo: +t.low };
@@ -119,7 +122,7 @@ export async function fetchQuoteVolume(m) {
 export function search(q, limit = 30) {
   q = (q || '').trim().toLowerCase().replace(/[\s/_-]+/g, '');
   if (!q) return [];
-  const qa = ALIAS[q] || null;
+  const qa = Object.prototype.hasOwnProperty.call(ALIAS, q) ? ALIAS[q] : null;
   const qs = q.replace(/(usdt|usdc|usd)$/, '') || q;
   const out = [];
   for (const m of universe.values()) {
@@ -134,8 +137,10 @@ export function search(q, limit = 30) {
   }
   return out.sort((a, b) => b[0] - a[0]).slice(0, limit).map(x => x[1]);
 }
+// 稳定币（价格锚定 1 美元，没有多空可看）不进“热门”，但仍可搜索
+const STABLE = new Set(['usdt', 'usdc', 'fdusd', 'tusd', 'usdp', 'dai', 'usde', 'usd1', 'pyusd', 'busd', 'usds', 'rlusd', 'eurc', 'eur', 'eurq', 'eurr', 'xusd', 'bfusd', 'usdg', 'aeur', 'gusd', 'usdd', 'frax']);
 export function topByVolume(n = 12) {
-  return [...universe.values()].filter(m => m.qv > 0).sort((a, b) => b.qv - a.qv).slice(0, n);
+  return [...universe.values()].filter(m => m.qv > 0 && !STABLE.has(m.id)).sort((a, b) => b.qv - a.qv).slice(0, n);
 }
 
 // 门槛：BTC / ETH 保持原值；其它币按 24h 成交额幂律缩放（成交额越小门槛越低），取整到 1/2/2.5/5×10^n

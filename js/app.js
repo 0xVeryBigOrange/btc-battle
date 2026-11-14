@@ -1,8 +1,8 @@
-import { FeedManager, SOURCES, fetchMiniTickers, fetchBinance1s, fetchBinanceAggTrades } from './feeds.js?v=90ea2eb1';
-import { PRESET, universe, loadUniverse, loadTickers, fetchQuoteVolume, thresholdsFor, search as searchCoins, topByVolume, recents, pushRecent, favorites, toggleFav, primarySource } from './markets.js?v=90ea2eb1';
-import { Battle } from './battle.js?v=90ea2eb1';
-import { t as T, lang, setLang, onLang, applyI18n, fmtUsd, fmtShort, fmtNum } from './i18n.js?v=90ea2eb1';
-import { AudioController } from './music.js?v=90ea2eb1';
+import { FeedManager, SOURCES, fetchMiniTickers, fetchBinance1s, fetchBinanceAggTrades } from './feeds.js?v=8156c0c3';
+import { PRESET, universe, loadUniverse, loadTickers, fetchQuoteVolume, thresholdsFor, search as searchCoins, topByVolume, recents, pushRecent, favorites, toggleFav, primarySource } from './markets.js?v=8156c0c3';
+import { Battle } from './battle.js?v=8156c0c3';
+import { t as T, lang, setLang, onLang, applyI18n, fmtUsd, fmtShort, fmtNum } from './i18n.js?v=8156c0c3';
+import { AudioController } from './music.js?v=8156c0c3';
 
 const $ = (id) => document.getElementById(id);
 const pad = (n) => String(n).padStart(2, '0');
@@ -50,6 +50,7 @@ battle.start();
 window.__battle = battle; // 调试用
 window.__cw = () => S.dbg;
 window.__big = () => ({ big: S.big, from: S.bigFrom, th: S.threshold });
+window.__univ = universe; // 调试用
 
 // ---------- 状态 ----------
 const S = {
@@ -162,7 +163,7 @@ function renderTrades() {
 // 开页时用 Binance 逐笔成交（aggTrades）回填最近约 30 分钟的大单，避免列表一打开是空的
 async function backfillBig(gen, firstId, afterId) {
   const ms = 30 * 60000, since = Date.now() - ms;
-  const raw = await fetchBinanceAggTrades(M, fm.binanceHost || 0, firstId, afterId ? 0 : since, afterId, 15);
+  const raw = await fetchBinanceAggTrades(M, fm.binanceHost || 0, firstId, afterId ? 0 : since, afterId, 15, () => gen === S.bfGen);
   if (gen !== S.bfGen) return;
   S.bigLoading = false;
   if (!raw) { renderTrades(); return; }
@@ -182,6 +183,7 @@ async function backfillBig(gen, firstId, afterId) {
 // 开页/重连时用 Binance 1 秒 K 线回填之前的成交（主动买卖量与每秒收盘价），
 // 这样 10 秒 / 1 分钟 / 5 分钟 一打开就是完整窗口，而不是“从打开网页起累计”
 async function backfill(gen, firstTs, skew, liveSec) {
+  if (gen !== S.bfGen) return; // 1.5 秒内已切币 → 不再发请求
   const k = await fetchBinance1s(M, fm.binanceHost || 0, 300);
   if (!k || gen !== S.bfGen) return;
   const now = Math.floor(Date.now() / 1000);
@@ -203,7 +205,8 @@ function statusText() {
   if (!lastStatus) return;
   const [state, label, src] = lastStatus;
   const lb = state === 'error' ? (T(label) || label) : label;
-  const txt = { connecting: T('sConnecting', lb), open: T('sOpen', lb), live: T('sLive', lb), error: T('sError', SOURCES[src].name, lb) }[state];
+  const txt = state !== 'live' && navigator.onLine === false ? T('sOffline') // 断网时直接说明原因，而不是在几个交易所之间“重试/切换”
+    : { connecting: T('sConnecting', lb), open: T('sOpen', lb), live: T('sLive', lb), error: T('sError', SOURCES[src].name, lb) }[state];
   $('statusText').textContent = txt; statusEl.title = txt;
 }
 const fm = new FeedManager({
@@ -224,6 +227,9 @@ const fm = new FeedManager({
 const sel = $('sourceSel');
 sel.value = params.get('source') || localStorage.getItem('bb_source') || 'auto';
 if (!sel.value) sel.value = 'auto';
+// 断网恢复：若当前不在正常接收，立刻从首选交易所重连（不用等退避计时器，也能从备用源切回 Binance）
+window.addEventListener('offline', statusText);
+window.addEventListener('online', () => { if (!lastStatus || lastStatus[0] !== 'live') fm.start(sel.value, M); });
 sel.onchange = () => { localStorage.setItem('bb_source', sel.value); resetStats(); fm.start(sel.value, M); };
 
 // ---------- 币种切换 ----------
@@ -248,15 +254,15 @@ const tabKey = (id) => PRESET[id] ? id : 'cur';
 let switchGen = 0, pendingSearch = null;
 async function resolveMarket(id) {
   if (PRESET[id]) return PRESET[id];
-  if (!/^[a-z0-9]{1,20}$/.test(id)) return null;
+  if (!/^[\p{L}\p{N}]{1,20}$/u.test(id)) return null; // 允许中文代码（Binance 有“币安人生”“牛来”）
   try { await loadUniverse(); } catch {}
   return universe.get(id) || null;
 }
 // 切换币种：断开旧连接 → 按新币的精度和门槛重置 → 重新连接、回填
 async function setCoin(id, { push = true, first = false } = {}) {
   id = String(id || '').toLowerCase().trim();
+  const g = ++switchGen; // 先作废进行中的切换（比如切换途中又点了当前币 / 按了后退）
   if (!first && id === coin) return;
-  const g = ++switchGen;
   const m = await resolveMarket(id);
   if (g !== switchGen) return;
   if (!m) {
@@ -280,6 +286,7 @@ async function setCoin(id, { push = true, first = false } = {}) {
   battle.setThresholds(CF.th);
   if (!first) { battle.reset(); showBanner(T('toCoin', m.base), 'gold', 1600, true); }
   renderChips(); resetStats(); S.src = null;
+  if (m.last > 0) S.last = m.last; // 冷门币可能几十秒没有成交 / 行情推送：先用搜索列表里的最新价（≤60 秒前），有成交后立即替换
   $('pair').textContent = `${m.base}/${SOURCES[primarySource(m)].quote}`;
   document.title = T('title', m.base);
   requestAnimationFrame(fitHeader);
@@ -302,6 +309,7 @@ function setMini(c, last, chg) {
   if (chg != null && isFinite(chg)) { ch.textContent = (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%'; ch.className = 'ct-ch ' + (chg >= 0 ? 'pos' : 'neg'); }
 }
 async function pollMini() {
+  if (document.hidden) return; // 后台标签页不轮询，省流量和 Binance 请求权重
   const o = await fetchMiniTickers();
   if (o) for (const c of Object.keys(o)) if (c !== coin || !S.last) setMini(c, o[c].last, o[c].chg);
 }
@@ -479,9 +487,9 @@ function refresh() {
     const cv = (r) => d.cover < r ? T('cover', (d.cover * 100).toFixed(2)) : ''; // 如 Coinbase 公共频道只给前 50 档
     ib = setRatio('bk05', d.b05, d.a05, 'bid', 'ask', T('bid') + ' ' + fmtUsd(d.b05), T('ask') + ' ' + fmtUsd(d.a05), cv(0.0049));
     setRatio('bk1', d.b1, d.a1, 'bid', 'ask', T('bid') + ' ' + fmtUsd(d.b1), T('ask') + ' ' + fmtUsd(d.a1), cv(0.0099));
-    $('bb').textContent = fmtP(d.bb); $('ba').textContent = fmtP(d.ba); $('spr').textContent = (d.ba - d.bb).toFixed(2);
+    $('bb').textContent = fmtP(d.bb); $('ba').textContent = fmtP(d.ba); $('spr').textContent = fmtP(d.ba - d.bb); // 按该币价格精度（PEPE 等低价币不再显示 0.00）
   }
-  drawDepth(d); drawFlow();
+  if (!document.hidden) { drawDepth(d); drawFlow(); } // 后台标签页不画小图表
 
   // ===== 战力模型（全部来自实时行情，无随机）=====
   // 价格涨跌占 50%：10 秒 25% + 1 分钟 25%；吃单 30%；挂单 20%
@@ -605,7 +613,7 @@ function rowHtml(m, i) {
   const k = q && m.id.indexOf(q); if (q && k >= 0) sym = esc(m.base.slice(0, k)) + '<mark class="sp-hl">' + esc(m.base.slice(k, k + q.length)) + '</mark>' + esc(m.base.slice(k + q.length));
   const px = m.last ? fmtPx(m.last, Math.min(m.dp ?? 2, 10)) : '--';
   const ch = m.chg != null && isFinite(m.chg) ? `<span class="sp-ch ${m.chg >= 0 ? 'pos' : 'neg'}">${m.chg >= 0 ? '+' : ''}${m.chg.toFixed(2)}%</span>` : '<span class="sp-ch">--</span>';
-  return `<div class="sp-row${i === sAct ? ' act' : ''}${m.id === coin ? ' cur' : ''}" role="option" data-i="${i}" data-id="${esc(m.id)}">` +
+  return `<div class="sp-row${i === sAct ? ' act' : ''}${m.id === coin ? ' cur' : ''}" role="option" id="sp-o${i}" aria-selected="${i === sAct}" data-i="${i}" data-id="${esc(m.id)}">` +
     `<button type="button" class="sp-star${fav ? ' on' : ''}" title="${esc(T('sFavT'))}" data-fav="${esc(m.id)}">${fav ? '★' : '☆'}</button>` +
     `<span class="sp-sym">${sym}<small>/${m.binance || m.okx ? 'USDT' : 'USD'}</small></span><span class="sp-ex">${exLabel(m)}</span>` +
     `<span class="sp-px">${px}</span>${ch}<span class="sp-vol">${m.qv ? fmtUsd(m.qv) : '--'}</span></div>`;
@@ -626,21 +634,23 @@ function renderSearch() {
   }
   if (sAct >= sItems.length) sAct = Math.max(0, sItems.length - 1);
   sList.innerHTML = html;
+  if (sItems.length) sIn.setAttribute('aria-activedescendant', 'sp-o' + sAct); else sIn.removeAttribute('aria-activedescendant');
   $('searchFoot').textContent = universe.size ? T('sFoot', universe.size) : '';
 }
 function setAct(i) {
   if (!sItems.length) return;
   sAct = (i + sItems.length) % sItems.length;
-  sList.querySelectorAll('.sp-row').forEach(r => r.classList.toggle('act', +r.dataset.i === sAct));
+  sList.querySelectorAll('.sp-row').forEach(r => { const on = +r.dataset.i === sAct; r.classList.toggle('act', on); r.setAttribute('aria-selected', on); });
+  sIn.setAttribute('aria-activedescendant', 'sp-o' + sAct);
   const el = sList.querySelector(`.sp-row[data-i="${sAct}"]`); if (el) el.scrollIntoView({ block: 'nearest' });
 }
 function openSearch(q = '') {
-  sPop.hidden = false; sIn.value = q; sAct = 0; renderSearch();
+  sPop.hidden = false; sIn.setAttribute('aria-expanded', 'true'); sIn.value = q; sAct = 0; renderSearch();
   setTimeout(() => sIn.focus(), 0);
   loadUniverse().then(renderSearch).catch(() => {});
   loadTickers().then(() => { if (!sPop.hidden) renderSearch(); }).catch(() => {}); // 60 秒内只拉一次
 }
-function closeSearch() { sPop.hidden = true; sIn.blur(); }
+function closeSearch() { sPop.hidden = true; sIn.setAttribute('aria-expanded', 'false'); sIn.blur(); }
 function pick(m) { if (!m) return; closeSearch(); setCoin(m.id); }
 $('searchBtn').onclick = (e) => { e.stopPropagation(); sPop.hidden ? openSearch() : closeSearch(); };
 $('searchClose').onclick = closeSearch;
@@ -665,7 +675,7 @@ document.addEventListener('keydown', (e) => {
     e.preventDefault(); openSearch();
   }
 });
-loadUniverse().catch(() => {}); // 后台预载（有缓存时瞬间完成）
+setTimeout(() => loadUniverse().catch(() => {}), 3000); // 首屏之后再后台预载币种列表（有缓存时瞬间完成；打开搜索时会立即加载）
 
 // ---------- 顶栏自适应（按实际内容宽度换行，避免作者徽章盖住币种切换）----------
 const topbar = document.querySelector('.topbar');
@@ -686,7 +696,7 @@ function fitHeader() {
 }
 window.addEventListener('resize', fitHeader);
 document.fonts && document.fonts.ready.then(fitHeader);
-setTimeout(fitHeader, 0); setInterval(fitHeader, 500); // 状态/配乐指示文字长度会变
+setTimeout(fitHeader, 0); setInterval(() => { if (!document.hidden) fitHeader(); }, 500); // 状态/配乐指示文字长度会变
 
 // ---------- 语言切换 ----------
 document.querySelectorAll('[data-lang]').forEach(b => b.onclick = (e) => { e.stopPropagation(); setLang(b.dataset.lang); });

@@ -1,5 +1,7 @@
 // 行情数据层：Binance / OKX / Coinbase 公共 WebSocket（无需 API Key），自动故障切换
 // 输出统一事件：trade / ticker / book / status
+import { fetchJson, binFetch, binCanSpend, binBlockedFor } from './net.js?v=8156c0c3';
+
 
 export const SOURCES = {
   binance: { name: 'Binance', quote: 'USDT' },
@@ -37,16 +39,6 @@ export class OrderBook {
   }
 }
 
-function fetchJson(url, ms = 8000) {
-  const ctl = typeof AbortController !== 'undefined' ? new AbortController() : null;
-  const t = setTimeout(() => ctl && ctl.abort(), ms);
-  return fetch(url, ctl ? { signal: ctl.signal } : {}).then(r => {
-    clearTimeout(t);
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    return r.json();
-  });
-}
-
 // ---------------- Binance ----------------
 function connectBinance(h, hostIdx, m) {
   const S = m.binance.toLowerCase();
@@ -60,7 +52,10 @@ function connectBinance(h, hostIdx, m) {
     if (syncing || closed) return;
     syncing = true;
     try {
-      const d = await fetchJson(`${host.rest}/api/v3/depth?symbol=${m.binance}&limit=5000`);
+      // 5000 档（权重 250）覆盖更深；额度紧张时降到 1000 档（权重 50），再不够就稍后重试
+      const lim = binCanSpend(250) ? 5000 : binCanSpend(50) ? 1000 : 0;
+      if (!lim) { syncing = false; setTimeout(snapshot, Math.max(5000, binBlockedFor())); return; }
+      const d = await binFetch(`${host.rest}/api/v3/depth?symbol=${m.binance}&limit=${lim}`, lim === 5000 ? 250 : 50);
       if (closed) return;
       book.clear();
       for (const [p, q] of d.bids) book.set('bid', +p, +q);
@@ -74,7 +69,7 @@ function connectBinance(h, hostIdx, m) {
       h.onBook(book);
     } catch (e) {
       h.onLog && h.onLog('Binance 深度快照失败: ' + e.message);
-      setTimeout(() => { syncing = false; snapshot(); }, 3000);
+      setTimeout(() => { syncing = false; snapshot(); }, Math.max(3000, binBlockedFor()));
       return;
     }
     syncing = false;
@@ -118,6 +113,7 @@ function connectOKX(h, m) {
   let closed = false, pingT, bookT;
   const ws = new WebSocket('wss://ws.okx.com/ws/v5/public');
   async function pollBook() {
+    if (document.hidden && book.ready) return; // 后台标签页暂停轮询（看不到盘口，省请求）
     try {
       const j = await fetchJson(`https://www.okx.com/api/v5/market/books-full?instId=${I}&sz=5000`);
       if (closed) return;
@@ -261,23 +257,25 @@ export async function fetchBinance1s(m, hostIdx = 0, limit = 300) {
   const hosts = [BINANCE_HOSTS[hostIdx].rest, ...BINANCE_HOSTS.map(h => h.rest)].filter((v, i, a) => a.indexOf(v) === i);
   for (const host of hosts) {
     try {
-      const k = await fetchJson(`${host}/api/v3/klines?symbol=${m.binance}&interval=1s&limit=${limit}`, 6000);
+      const k = await binFetch(`${host}/api/v3/klines?symbol=${m.binance}&interval=1s&limit=${limit}`, 2, 6000);
       return k.map(x => ({ t: x[0], c: +x[4], v: +x[5], q: +x[7], n: x[8], tb: +x[9], tbq: +x[10] }));
-    } catch {}
+    } catch (e) { if (e.rate) return null; }
   }
   return null;
 }
 
 // Binance 逐笔成交（aggTrades）：从 beforeId 往回翻页，直到早于 sinceMs、到达 afterId 或翻满 maxPages 页
 // 返回按 id 升序、id 在 (afterId, beforeId) 之间的成交 [{ id, p, q, T, m }]
-export async function fetchBinanceAggTrades(m, hostIdx, beforeId, sinceMs, afterId = 0, maxPages = 15) {
+export async function fetchBinanceAggTrades(m, hostIdx, beforeId, sinceMs, afterId = 0, maxPages = 15, alive = () => true) {
   const host = BINANCE_HOSTS[hostIdx].rest, S = m.binance;
   let out = [], from = Math.max(afterId + 1, beforeId - 1000);
   try {
     for (let i = 0; i < maxPages; i++) {
       const lim = Math.min(1000, beforeId - from);
       if (lim <= 0) break;
-      const a = await fetchJson(`${host}/api/v3/aggTrades?symbol=${S}&fromId=${from}&limit=${lim}`, 8000);
+      if (!alive()) return null; // 已切换币种 → 停止翻页，省下请求权重
+      if (!binCanSpend(4 + 200)) break; // 每页权重 4；给盘口快照留余量，额度不足就只用已拿到的部分
+      const a = await binFetch(`${host}/api/v3/aggTrades?symbol=${S}&fromId=${from}&limit=${lim}`, 4, 8000);
       const rows = a.filter(x => x.a < beforeId && x.a > afterId).map(x => ({ id: x.a, p: +x.p, q: +x.q, T: x.T, m: x.m }));
       out = rows.concat(out);
       if (!a.length || from <= afterId + 1 || (sinceMs && a[0].T < sinceMs)) break;
@@ -293,7 +291,7 @@ export async function fetchMiniTickers() {
     async () => {
       for (const host of ['https://api.binance.com', 'https://data-api.binance.vision']) {
         try {
-          const j = await fetchJson(`${host}/api/v3/ticker/24hr?symbols=${encodeURIComponent('["BTCUSDT","ETHUSDT"]')}&type=MINI`, 5000);
+          const j = await binFetch(`${host}/api/v3/ticker/24hr?symbols=${encodeURIComponent('["BTCUSDT","ETHUSDT"]')}&type=MINI`, 4, 5000);
           const o = {};
           for (const t of j) o[t.symbol === 'BTCUSDT' ? 'btc' : 'eth'] = { last: +t.lastPrice, chg: (+t.lastPrice / +t.openPrice - 1) * 100 };
           return o;

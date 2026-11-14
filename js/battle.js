@@ -1,5 +1,5 @@
 // 战场动画：Canvas 2D，蓝军（多）在左，红军（空）在右
-import { t as tr, fmtUsd } from './i18n.js?v=90ea2eb1';
+import { t as tr, fmtUsd } from './i18n.js?v=8156c0c3';
 const TAU = Math.PI * 2;
 const rand = (a, b) => a + Math.random() * (b - a);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -40,6 +40,7 @@ function makeSmoke(size = 64) {
   x.fillStyle = gr; x.fillRect(0, 0, size, size); return c;
 }
 
+const RM = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null;
 export class Battle {
   constructor(canvas) {
     this.cv = canvas; this.ctx = canvas.getContext('2d');
@@ -476,6 +477,7 @@ export class Battle {
     this.streaks = this.streaks.filter(s => s.life > 0);
 
     this.shake *= Math.exp(-dt * 7); this.flash *= Math.exp(-dt * 5);
+    if (RM && RM.matches) { this.shake = 0; this.zoom = 1; this.flash = Math.min(this.flash, 0.12); } // 系统“减少动态效果”：不震屏、不缩放、弱闪光
   }
 
   // ---------- 绘制 ----------
