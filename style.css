@@ -356,3 +356,68 @@ mark.sp-hl{background:none;color:#fde68a}
 .topbar.stack3 .search-btn .sb-txt,.topbar.stack3 .search-btn kbd{display:none}
 .topbar.stack3 .coin-tabs button{padding-left:10px;padding-right:10px;gap:6px}
 .topbar.stack4 .coin-tabs .ct-ch{display:none}
+
+/* ---------- 喊单评论区 + 弹幕 ---------- */
+.layout{grid-template-areas:"price price price" "battle battle battle" "chat chat chat" "taker book trades"}
+.layout .card:nth-child(6){animation-delay:.2s}
+.chat-card{grid-area:chat;display:flex;flex-direction:column;min-height:0;height:420px}
+.chat-card h2{margin-bottom:10px}
+.chat-live{font-size:11px;font-weight:700;color:var(--mut);margin-left:auto}
+.chat-live.live{color:#4ade80}
+.chat-list{list-style:none;margin:0 -6px;padding:0 6px;flex:1 1 0;min-height:0;overflow-y:auto;overscroll-behavior:contain;display:flex;flex-direction:column;gap:6px;scrollbar-width:thin}
+.chat-ph{margin:auto;color:var(--mut);font-size:12.5px;text-align:center;padding:16px}
+.cm{padding:7px 10px;border-radius:10px;background:rgba(255,255,255,.035);border-left:3px solid rgba(255,255,255,.25);font-size:13px;line-height:1.45}
+.cm.bull{border-left-color:var(--blue);background:rgba(59,130,246,.08)}
+.cm.bear{border-left-color:var(--red);background:rgba(239,68,68,.08)}
+.cm.mine{box-shadow:inset 0 0 0 1px rgba(251,191,36,.35)}
+.cm-top{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--mut);margin-bottom:2px;min-width:0}
+.cm-nick{font-weight:700;color:#cbd5f5;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60%}
+.cm-coin{font-family:var(--mono);font-size:10px;padding:0 6px;border-radius:6px;background:rgba(255,255,255,.08);color:#e2e8f0}
+.cm-side{font-size:10px;font-weight:800;padding:0 5px;border-radius:5px;color:#fff}
+.cm-side.bull{background:var(--blue)}.cm-side.bear{background:var(--red)}
+.cm-time{margin-left:auto;font-family:var(--mono);font-size:10.5px}
+.cm-body{color:var(--txt);white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word}
+.chat-form{margin-top:10px;display:flex;flex-direction:column;gap:7px}
+.chat-row{display:flex;gap:7px;align-items:center}
+.chat-form input{min-width:0;background:rgba(5,8,18,.6);border:1px solid var(--line2);color:var(--txt);border-radius:10px;padding:9px 10px;font:inherit;font-size:14px;outline:none}
+.chat-form input:focus{border-color:rgba(147,197,253,.6);box-shadow:0 0 0 3px rgba(59,130,246,.15)}
+.chat-nick{width:92px;flex:0 0 auto}.chat-in{flex:1}
+.cb{flex:1;border:0;border-radius:10px;padding:9px 6px;font:inherit;font-size:13px;font-weight:800;color:#fff;cursor:pointer;transition:transform .15s,filter .15s;white-space:nowrap}
+.cb:hover{filter:brightness(1.12)}.cb:active{transform:scale(.96)}.cb:disabled{opacity:.55;cursor:wait}
+.cb.bull{background:linear-gradient(135deg,#2563eb,#3b82f6)}
+.cb.bear{background:linear-gradient(135deg,#dc2626,#ef4444)}
+.cb.send{background:rgba(255,255,255,.12);flex:.8}
+.chat-cnt{font-family:var(--mono);font-size:10.5px;color:var(--mut);min-width:44px;text-align:right}
+.chat-cnt.warn{color:var(--gold)}
+.chat-msg{font-size:12px;min-height:0;max-height:0;overflow:hidden;transition:max-height .2s;color:#86efac}
+.chat-msg.show{max-height:40px}.chat-msg.bad{color:#fca5a5}
+.chat-note{font-size:10.5px;color:var(--mut);opacity:.75}
+.dm-tog{border:1px solid var(--line2);background:rgba(5,8,18,.55);color:#e2e8f0;border-radius:9px;padding:4px 9px;font:inherit;font-size:11.5px;font-weight:700;cursor:pointer;white-space:nowrap}
+.dm-tog.off{opacity:.6;text-decoration:line-through}
+.battle-card .dm-tog{position:absolute;right:10px;bottom:8px;z-index:3;backdrop-filter:blur(4px)}
+.danmaku{position:absolute;inset:0;pointer-events:none;overflow:hidden;z-index:2;contain:strict}
+.dm{position:absolute;left:0;white-space:nowrap;font-weight:800;font-size:17px;line-height:1.5;will-change:transform;max-width:none;
+  color:#fff;text-shadow:-1px -1px 0 #000,1px -1px 0 #000,-1px 1px 0 #000,1px 1px 0 #000,0 0 6px rgba(0,0,0,.8)}
+.dm.bull{color:#93c5fd;text-shadow:-1px -1px 0 #0b1a3a,1px -1px 0 #0b1a3a,-1px 1px 0 #0b1a3a,1px 1px 0 #0b1a3a,0 0 10px rgba(59,130,246,.9)}
+.dm.bear{color:#fca5a5;text-shadow:-1px -1px 0 #3a0b0b,1px -1px 0 #3a0b0b,-1px 1px 0 #3a0b0b,1px 1px 0 #3a0b0b,0 0 10px rgba(239,68,68,.9)}
+.dm.mine{padding:0 6px;border:1.5px solid rgba(251,191,36,.85);border-radius:8px}
+.dm-tag{font-family:var(--mono);font-size:.68em;padding:0 5px;margin-right:5px;border-radius:5px;background:rgba(255,255,255,.18);vertical-align:2px;text-shadow:none;color:#fff}
+@media (min-width:1201px){
+  .layout{grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1.15fr) clamp(300px,24vw,380px);
+    grid-template-areas:"price price price chat" "battle battle battle chat" "taker book trades chat"}
+  .chat-card{height:auto}
+  .chat-card h2 small{display:none}
+}
+@media (max-width:1000px){
+  .layout{grid-template-areas:"price price" "battle battle" "chat chat" "taker book" "trades trades"}
+}
+@media (max-width:640px){
+  .layout{grid-template-areas:"price" "battle" "chat" "taker" "book" "trades"}
+  .chat-card{height:400px}
+  .dm{font-size:14.5px}
+  .chat-nick{width:96px}
+  .chat-form input{font-size:16px} /* iOS 不自动放大 */
+  .cb{font-size:12.5px;padding:9px 4px}
+  .chat-card h2 small{display:none}
+  .battle-card .dm-tog{bottom:auto;top:52px;right:8px;font-size:10.5px;padding:3px 7px}
+}

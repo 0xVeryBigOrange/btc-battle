@@ -1,8 +1,9 @@
-import { FeedManager, SOURCES, fetchMiniTickers, fetchBinance1s, fetchBinanceAggTrades } from './feeds.js?v=8156c0c3';
-import { PRESET, universe, loadUniverse, loadTickers, fetchQuoteVolume, thresholdsFor, search as searchCoins, topByVolume, recents, pushRecent, favorites, toggleFav, primarySource } from './markets.js?v=8156c0c3';
-import { Battle } from './battle.js?v=8156c0c3';
-import { t as T, lang, setLang, onLang, applyI18n, fmtUsd, fmtShort, fmtNum } from './i18n.js?v=8156c0c3';
-import { AudioController } from './music.js?v=8156c0c3';
+import { FeedManager, SOURCES, fetchMiniTickers, fetchBinance1s, fetchBinanceAggTrades } from './feeds.js?v=8a047a9b';
+import { PRESET, universe, loadUniverse, loadTickers, fetchQuoteVolume, thresholdsFor, search as searchCoins, topByVolume, recents, pushRecent, favorites, toggleFav, primarySource } from './markets.js?v=8a047a9b';
+import { Battle } from './battle.js?v=8a047a9b';
+import { t as T, lang, setLang, onLang, applyI18n, fmtUsd, fmtShort, fmtNum } from './i18n.js?v=8a047a9b';
+import { AudioController } from './music.js?v=8a047a9b';
+import { initChat } from './chat.js?v=8a047a9b';
 
 const $ = (id) => document.getElementById(id);
 const pad = (n) => String(n).padStart(2, '0');
@@ -710,3 +711,5 @@ document.title = T('title');
 
 // ---------- 启动 ----------
 setCoin(wantCoin, { first: true });
+// 喊单评论区 + 弹幕（独立模块，后端不可用时只影响评论区）
+try { initChat({ getCoin: () => M.base, battleHost: document.querySelector('.battle-card') }); } catch (e) { console.warn('chat init failed', e); }

@@ -85,6 +85,12 @@ const D = {
     sFav: '⭐ 收藏', sRecent: '🕘 最近', sHot: '🔥 热门（24h 成交额）', sLoading: '正在加载币种列表…', sNone: (q) => `没有找到「${q}」`,
     sFoot: (n) => `共 ${n} 个币种 · Binance / OKX / Coinbase 现货 · ↑↓ 选择 · Enter 打开 · Esc 关闭`, sFavT: '收藏 / 取消收藏', sVol: '额',
     mLocked: '🔊 点击开启战歌', mOff: '配乐已关', mSfx: '💥 音效', crit: '暴击 ',
+    chatT: '战场喊单', chatSub: '匿名 · 实时 · 弹幕', chatPh: '说点什么… 喊单、吐槽都行（最多 140 字）', chatNickPh: '昵称', chatNickT: '昵称（可选，保存在本机）',
+    chatLong: '喊多 🟦', chatShort: '喊空 🟥', chatSend: '发送', chatLongDef: '多军冲锋！🚀', chatShortDef: '空军砸盘！📉',
+    chatLoading: '正在连接喊单频道…', chatEmpty: '还没有人喊单，来抢沙发！', chatDown: '评论暂不可用，稍后自动重试（不影响战场）',
+    chatRate: '喊太快了，歇 3 秒再来', chatRateG: '战场太热闹了，稍等几秒再喊', chatErr: '发送失败，请重试', chatEmptyBody: '先写点内容',
+    dmOn: '弹幕 开', dmOff: '弹幕 关', dmT: '弹幕开关', chatLive: '实时', chatOff: '重连中', chatMe: '我', chatSideBull: '多', chatSideBear: '空',
+    chatNote: '匿名发言，内容为网友观点，不代表本站，不构成投资建议',
   },
   en: {
     title: (p) => `${p ? p + ' · ' : ''}Crypto War · Bulls vs Bears | Live crypto battle`,
@@ -130,6 +136,12 @@ const D = {
     sFav: '⭐ Favorites', sRecent: '🕘 Recent', sHot: '🔥 Top by 24h volume', sLoading: 'Loading coin list…', sNone: (q) => `No coins match “${q}”`,
     sFoot: (n) => `${n} coins · Binance / OKX / Coinbase spot · ↑↓ select · Enter open · Esc close`, sFavT: 'Add / remove favorite', sVol: 'Vol',
     mLocked: '🔊 Tap to start war music', mOff: 'Music off', mSfx: '💥 SFX', crit: 'CRIT ',
+    chatT: 'Battle Chat', chatSub: 'anonymous · live · danmaku', chatPh: 'Say something… call your trade (max 140)', chatNickPh: 'Nickname', chatNickT: 'Nickname (optional, saved on this device)',
+    chatLong: 'Long 🟦', chatShort: 'Short 🟥', chatSend: 'Send', chatLongDef: 'Bulls, charge! 🚀', chatShortDef: 'Bears, dump it! 📉',
+    chatLoading: 'Connecting to the chat…', chatEmpty: 'No calls yet — be the first!', chatDown: 'Comments unavailable right now, retrying (the battle is unaffected)',
+    chatRate: 'Too fast — wait 3 seconds', chatRateG: 'The battlefield is busy, try again in a few seconds', chatErr: 'Send failed, please retry', chatEmptyBody: 'Write something first',
+    dmOn: 'Danmaku on', dmOff: 'Danmaku off', dmT: 'Toggle flying comments', chatLive: 'Live', chatOff: 'Reconnecting', chatMe: 'me', chatSideBull: 'L', chatSideBear: 'S',
+    chatNote: 'Anonymous posts are visitors\' opinions, not financial advice',
   },
 };
 export function t(key, ...a) {
