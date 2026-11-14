@@ -7,10 +7,7 @@ export const SOURCES = {
   coinbase: { name: 'Coinbase', quote: 'USD' },
 };
 export const COINS = { btc: 'BTC', eth: 'ETH' };
-const sym = {
-  binance: (c) => c + 'usdt', binanceRest: (c) => c.toUpperCase() + 'USDT',
-  okx: (c) => c.toUpperCase() + '-USDT', coinbase: (c) => c.toUpperCase() + '-USD',
-};
+// m = 市场描述 { id, base, binance:'SOLUSDT'|null, okx:'SOL-USDT'|null, coinbase:'SOL-USD'|null }
 export const AUTO_ORDER = ['binance', 'okx', 'coinbase'];
 
 const BINANCE_HOSTS = [
@@ -51,8 +48,8 @@ function fetchJson(url, ms = 8000) {
 }
 
 // ---------------- Binance ----------------
-function connectBinance(h, hostIdx = 0, coin = 'btc') {
-  const S = sym.binance(coin);
+function connectBinance(h, hostIdx, m) {
+  const S = m.binance.toLowerCase();
   const host = BINANCE_HOSTS[hostIdx];
   const book = new OrderBook();
   let closed = false, ws, buffer = [], lastU = null, syncing = false, resyncTimer;
@@ -63,7 +60,7 @@ function connectBinance(h, hostIdx = 0, coin = 'btc') {
     if (syncing || closed) return;
     syncing = true;
     try {
-      const d = await fetchJson(`${host.rest}/api/v3/depth?symbol=${sym.binanceRest(coin)}&limit=5000`);
+      const d = await fetchJson(`${host.rest}/api/v3/depth?symbol=${m.binance}&limit=5000`);
       if (closed) return;
       book.clear();
       for (const [p, q] of d.bids) book.set('bid', +p, +q);
@@ -104,7 +101,7 @@ function connectBinance(h, hostIdx = 0, coin = 'btc') {
       if (syncing || lastU == null) buffer.push(d); else applyDiff(d, false);
       if (buffer.length > 2000) buffer.splice(0, buffer.length - 2000);
     } else if (s.endsWith('@miniTicker')) {
-      h.onTicker({ last: +d.c, open24h: +d.o, high24h: +d.h, low24h: +d.l, vol24h: +d.v });
+      h.onTicker({ last: +d.c, open24h: +d.o, high24h: +d.h, low24h: +d.l, vol24h: +d.v, qv: +d.q });
     }
   };
   ws.onerror = () => {};
@@ -115,8 +112,8 @@ function connectBinance(h, hostIdx = 0, coin = 'btc') {
 }
 
 // ---------------- OKX ----------------
-function connectOKX(h, coin = 'btc') {
-  const I = sym.okx(coin);
+function connectOKX(h, m) {
+  const I = m.okx;
   const book = new OrderBook();
   let closed = false, pingT, bookT;
   const ws = new WebSocket('wss://ws.okx.com/ws/v5/public');
@@ -144,7 +141,7 @@ function connectOKX(h, coin = 'btc') {
       for (const t of m.data) h.onTrade({ price: +t.px, qty: +t.sz, side: t.side, ts: +t.ts });
     } else if (m.arg.channel === 'tickers') {
       const t = m.data[0];
-      h.onTicker({ last: +t.last, open24h: +t.open24h, high24h: +t.high24h, low24h: +t.low24h, vol24h: +t.vol24h });
+      h.onTicker({ last: +t.last, open24h: +t.open24h, high24h: +t.high24h, low24h: +t.low24h, vol24h: +t.vol24h, qv: +t.volCcy24h });
     }
   };
   ws.onerror = () => {};
@@ -153,8 +150,8 @@ function connectOKX(h, coin = 'btc') {
 }
 
 // ---------------- Coinbase ----------------
-function connectCoinbase(h, coin = 'btc') {
-  const P = sym.coinbase(coin);
+function connectCoinbase(h, m) {
+  const P = m.coinbase;
   const book = new OrderBook();
   let closed = false, lastEmit = 0;
   const ws = new WebSocket('wss://ws-feed.exchange.coinbase.com');
@@ -169,7 +166,7 @@ function connectCoinbase(h, coin = 'btc') {
         h.onTrade({ price: +d.price, qty: +d.size, side: d.side === 'sell' ? 'buy' : 'sell', ts: Date.parse(d.time) });
         break;
       case 'ticker':
-        h.onTicker({ last: +d.price, open24h: +d.open_24h, high24h: +d.high_24h, low24h: +d.low_24h, vol24h: +d.volume_24h });
+        h.onTicker({ last: +d.price, open24h: +d.open_24h, high24h: +d.high_24h, low24h: +d.low_24h, vol24h: +d.volume_24h, qv: +d.volume_24h * +d.price });
         break;
       case 'snapshot':
         book.clear();
@@ -202,9 +199,12 @@ export class FeedManager {
     this.lastData = 0; this.fails = 0; this.gen = 0;
     this.watchdog = setInterval(() => this._check(), 2000);
   }
-  start(mode = 'auto', coin = this.coin || 'btc') {
-    this.mode = mode; this.coin = coin;
-    this.order = mode === 'auto' ? AUTO_ORDER : [mode];
+  start(mode = 'auto', market = this.market) {
+    this.market = market;
+    const avail = AUTO_ORDER.filter(s => market[s]);
+    if (mode !== 'auto' && !market[mode]) mode = 'auto'; // 该交易所没有这个币 → 自动
+    this.mode = mode;
+    this.order = mode === 'auto' ? avail : [mode];
     this.idx = 0; this.binanceHost = 0; this.fails = 0;
     this._connect();
   }
@@ -222,11 +222,11 @@ export class FeedManager {
       onClose: guard(() => this._fail('eClosed')),
       onTrade: guard((t) => { this._alive(label, src); this.h.onTrade(t, src); }),
       onTicker: guard((t) => { this._alive(label, src); this.h.onTicker(t, src); }),
-      onBook: guard((b) => this.h.onBook(b, src)),
+      onBook: guard((b) => { this._alive(label, src); this.h.onBook(b, src); }), // 冷门币可能很久没成交，盘口更新也算“在线”
       onLog: (m) => console.warn(m),
     };
     try {
-      this.conn = src === 'binance' ? CONNECTORS.binance(hh, this.binanceHost, this.coin) : CONNECTORS[src](hh, this.coin);
+      this.conn = src === 'binance' ? CONNECTORS.binance(hh, this.binanceHost, this.market) : CONNECTORS[src](hh, this.market);
     } catch (e) { this._fail(e.message); }
   }
   _alive(label, src) {
@@ -257,11 +257,11 @@ export class FeedManager {
 
 // Binance 最近 N 秒的 1 秒 K 线（含主动买入量），用于开页时回填 10秒/1分钟/5分钟 窗口
 // 返回 [{ t: 开盘毫秒(交易所时间), c: 收盘价, v: 成交量, tb: 主动买入量, q: 成交额, tbq: 主动买入额, n: 笔数 }]
-export async function fetchBinance1s(coin, hostIdx = 0, limit = 300) {
+export async function fetchBinance1s(m, hostIdx = 0, limit = 300) {
   const hosts = [BINANCE_HOSTS[hostIdx].rest, ...BINANCE_HOSTS.map(h => h.rest)].filter((v, i, a) => a.indexOf(v) === i);
   for (const host of hosts) {
     try {
-      const k = await fetchJson(`${host}/api/v3/klines?symbol=${sym.binanceRest(coin)}&interval=1s&limit=${limit}`, 6000);
+      const k = await fetchJson(`${host}/api/v3/klines?symbol=${m.binance}&interval=1s&limit=${limit}`, 6000);
       return k.map(x => ({ t: x[0], c: +x[4], v: +x[5], q: +x[7], n: x[8], tb: +x[9], tbq: +x[10] }));
     } catch {}
   }
@@ -270,8 +270,8 @@ export async function fetchBinance1s(coin, hostIdx = 0, limit = 300) {
 
 // Binance 逐笔成交（aggTrades）：从 beforeId 往回翻页，直到早于 sinceMs、到达 afterId 或翻满 maxPages 页
 // 返回按 id 升序、id 在 (afterId, beforeId) 之间的成交 [{ id, p, q, T, m }]
-export async function fetchBinanceAggTrades(coin, hostIdx, beforeId, sinceMs, afterId = 0, maxPages = 15) {
-  const host = BINANCE_HOSTS[hostIdx].rest, S = sym.binanceRest(coin);
+export async function fetchBinanceAggTrades(m, hostIdx, beforeId, sinceMs, afterId = 0, maxPages = 15) {
+  const host = BINANCE_HOSTS[hostIdx].rest, S = m.binance;
   let out = [], from = Math.max(afterId + 1, beforeId - 1000);
   try {
     for (let i = 0; i < maxPages; i++) {
