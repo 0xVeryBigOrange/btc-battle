@@ -44,7 +44,8 @@ export function fmtShort(v) {
 const D = {
   zh: {
     title: (p) => `${p ? p + ' · ' : ''}Crypto War · 多空战场 | 加密货币实时多空对决`,
-    metaDesc: 'Crypto War · 多空战场：BTC / ETH 实时价格、挂单与吃单对决，蓝军（多）vs 红军（空）动画战场。by 大橙子 @0xVeryBigOrange',
+    metaDesc: 'Crypto War · 多空战场：BTC、ETH、SOL、DOGE 等 650+ 币种实时价格、挂单与吃单对决，蓝军（多）vs 红军（空）动画战场。by 大橙子 @0xVeryBigOrange',
+    battleAria: '实时多空战场动画：蓝军代表买方（多），红军代表卖方（空）',
     introSub: '多 空 战 场', introGo: '⚔️ 点击进入战场 🔊', introHint: '实时行情驱动 · 战鼓随多空节奏变化',
     introGather: '集结部队中…', introConn: (l) => `连接战场情报 · ${l}…`, introScout: '侦察敌情中…', introReady: '部队就位',
     introStart: '⚔️ 战斗开始！', introClick: '战鼓已备好 · 点击开战',
@@ -95,7 +96,8 @@ const D = {
   },
   en: {
     title: (p) => `${p ? p + ' · ' : ''}Crypto War · Bulls vs Bears | Live crypto battle`,
-    metaDesc: 'Crypto War: live BTC / ETH price, order book and taker flow as an animated battle — Blue Army (bulls) vs Red Army (bears). by 大橙子 (Big Orange) @0xVeryBigOrange',
+    metaDesc: 'Crypto War: live price, order book and taker flow for BTC, ETH, SOL, DOGE and 650+ coins as an animated battle — Blue Army (bulls) vs Red Army (bears). by 大橙子 (Big Orange) @0xVeryBigOrange',
+    battleAria: 'Live battle animation: the blue army is buyers (bulls), the red army is sellers (bears)',
     introSub: 'BULLS · VS · BEARS', introGo: '⚔️ Enter the battlefield 🔊', introHint: 'Driven by live market data · the drums follow the bulls and bears',
     introGather: 'Mustering the troops…', introConn: (l) => `Connecting to ${l}…`, introScout: 'Scouting the enemy…', introReady: 'Troops in position',
     introStart: '⚔️ Battle begins!', introClick: 'War drums ready · click to fight',

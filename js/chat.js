@@ -1,6 +1,6 @@
 // 匿名喊单评论区 + 弹幕：Supabase REST（读/写）+ Realtime WebSocket（postgres_changes INSERT），不依赖 SDK
 // 只使用公开的 publishable key；表开启 RLS，匿名只能读和发，数据库端限流（同 IP 3 秒 1 条 / 每分钟 10 条）
-import { t as T, onLang, lang as _lang } from './i18n.js?v=ebdd6cab';
+import { t as T, onLang, lang as _lang } from './i18n.js?v=acad4705';
 
 const SB_URL = 'https://gtdvykkdvpzsnhlqlgun.supabase.co';
 const SB_KEY = 'sb_publishable_i5XDXdgwAMTA0PHFCWTeew_qDAv9-pU';
@@ -99,7 +99,8 @@ export function initChat({ getCoin, battleHost }) {
   const list = $('chatList'), input = $('chatIn'), nickIn = $('chatNick'), msg = $('chatMsg'), cnt = $('chatCnt'), live = $('chatLive');
   const dm = new Danmaku(battleHost);
   const items = new Map(); // id → comment
-  const mine = new Set(JSON.parse(sessionStorage.getItem('cw_mine') || '[]'));
+  let mine0 = []; try { mine0 = JSON.parse(sessionStorage.getItem('cw_mine') || '[]'); } catch {}
+  const mine = new Set(Array.isArray(mine0) ? mine0.filter(Number.isSafeInteger) : []);
   let lastId = 0, state = 'loading', ws = null, wsRef = 0, hb = null, backoff = 1000, cooldown = 0, msgTimer = null, retryT = null;
 
   // 昵称：本机固定一个随机编号，前缀随语言（中文 韭菜#1234 / 英文 Degen#1234）

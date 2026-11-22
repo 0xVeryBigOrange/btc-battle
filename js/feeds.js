@@ -1,6 +1,6 @@
 // 行情数据层：Binance / OKX / Coinbase 公共 WebSocket（无需 API Key），自动故障切换
 // 输出统一事件：trade / ticker / book / status
-import { fetchJson, binFetch, binCanSpend, binBlockedFor } from './net.js?v=ebdd6cab';
+import { fetchJson, binFetch, binCanSpend, binBlockedFor } from './net.js?v=acad4705';
 
 
 export const SOURCES = {
@@ -88,8 +88,9 @@ function connectBinance(h, hostIdx, m) {
 
   ws.onopen = () => { h.onOpen(); snapshot(); };
   ws.onmessage = (e) => {
-    const m = JSON.parse(e.data); const s = m.stream, d = m.data;
-    if (!d) return;
+    let m; try { m = JSON.parse(e.data); } catch { return; }
+    const s = m && m.stream, d = m && m.data;
+    if (!d || typeof s !== 'string') return;
     if (s.endsWith('@aggTrade')) {
       h.onTrade({ price: +d.p, qty: +d.q, side: d.m ? 'sell' : 'buy', ts: d.T, id: d.a });
     } else if (s.endsWith('@depth@100ms')) {
@@ -132,7 +133,8 @@ function connectOKX(h, m) {
   };
   ws.onmessage = (e) => {
     if (e.data === 'pong') return;
-    const m = JSON.parse(e.data); if (!m.data || !m.arg) return;
+    let m; try { m = JSON.parse(e.data); } catch { return; }
+    if (!m || !Array.isArray(m.data) || !m.data.length || !m.arg) return;
     if (m.arg.channel === 'trades') {
       for (const t of m.data) h.onTrade({ price: +t.px, qty: +t.sz, side: t.side, ts: +t.ts });
     } else if (m.arg.channel === 'tickers') {
@@ -156,7 +158,8 @@ function connectCoinbase(h, m) {
     h.onOpen();
   };
   ws.onmessage = (e) => {
-    const d = JSON.parse(e.data);
+    let d; try { d = JSON.parse(e.data); } catch { return; }
+    if (!d) return;
     switch (d.type) {
       case 'match': // side 为挂单方方向，主动方相反
         h.onTrade({ price: +d.price, qty: +d.size, side: d.side === 'sell' ? 'buy' : 'sell', ts: Date.parse(d.time) });
@@ -182,6 +185,7 @@ function connectCoinbase(h, m) {
   return { close() { closed = true; try { ws.close(); } catch {} }, book };
 }
 
+const PROBE_MIN = 60000, PROBE_MAX = 600000;
 const CONNECTORS = { binance: connectBinance, okx: connectOKX, coinbase: connectCoinbase };
 
 /**
@@ -193,6 +197,7 @@ export class FeedManager {
     this.h = handlers; this.conn = null; this.mode = 'auto';
     this.order = AUTO_ORDER; this.idx = 0; this.binanceHost = 0;
     this.lastData = 0; this.fails = 0; this.gen = 0;
+    this.probeEvery = PROBE_MIN; this.nextProbe = 0; this.probing = false; this.switchedBackAt = 0;
     this.watchdog = setInterval(() => this._check(), 2000);
   }
   start(mode = 'auto', market = this.market) {
@@ -202,6 +207,7 @@ export class FeedManager {
     this.mode = mode;
     this.order = mode === 'auto' ? avail : [mode];
     this.idx = 0; this.binanceHost = 0; this.fails = 0;
+    this.probeEvery = PROBE_MIN; this.switchedBackAt = 0;
     this._connect();
   }
   get source() { return this.order[this.idx]; }
@@ -210,6 +216,8 @@ export class FeedManager {
     const gen = ++this.gen;
     const src = this.source;
     this.openedAt = Date.now(); this.lastData = 0; this.gotData = false;
+    // 自动模式下落到了备用源（OKX / Coinbase），而这个币 Binance 也有 → 稍后探测 Binance 是否恢复
+    this.nextProbe = this.mode === 'auto' && src !== 'binance' && this.market && this.market.binance ? Date.now() + this.probeEvery : 0;
     const label = SOURCES[src].name + (src === 'binance' && this.binanceHost === 2 ? ' (vision)' : '');
     this.h.onStatus('connecting', label, src);
     const guard = (fn) => (...a) => { if (gen === this.gen) fn(...a); };
@@ -234,11 +242,43 @@ export class FeedManager {
     const now = Date.now();
     if (!this.gotData && now - this.openedAt > 9000) this._fail('eTimeout');
     else if (this.gotData && now - this.lastData > 20000) this._fail('eStall');
+    else if (this.nextProbe && now >= this.nextProbe && this.gotData && !this.probing && !document.hidden && navigator.onLine !== false) this._probeBinance();
+  }
+  // 探测 Binance WebSocket：能订阅成功就切回主数据源；探测失败则拉长下次探测间隔（1 → 2 → 4 … 最长 10 分钟）
+  _probeBinance() {
+    const gen = this.gen, sym = String(this.market.binance).toLowerCase(), tries = [0, 2];
+    this.probing = true; this.nextProbe = 0;
+    const next = () => {
+      if (gen !== this.gen || this.source === 'binance') { this.probing = false; return; }
+      if (!tries.length) {
+        this.probing = false; this.probeEvery = Math.min(this.probeEvery * 2, PROBE_MAX); this.nextProbe = Date.now() + this.probeEvery; return;
+      }
+      const hostIdx = tries.shift(); let done = false, ws, to;
+      const finish = (ok) => {
+        if (done) return; done = true; clearTimeout(to);
+        try { ws && ws.close(); } catch {}
+        if (!ok) return next();
+        this.probing = false;
+        if (gen !== this.gen || this.source === 'binance' || this.mode !== 'auto') return;
+        const i = this.order.indexOf('binance'); if (i < 0) return;
+        console.info('Binance 已恢复，切回主数据源');
+        this.switchedBackAt = Date.now(); this.idx = i; this.binanceHost = hostIdx; this.fails = 0;
+        this._connect();
+      };
+      try { ws = new WebSocket(`${BINANCE_HOSTS[hostIdx].ws}/ws`); } catch { return finish(false); }
+      to = setTimeout(() => finish(false), 8000);
+      ws.onopen = () => { try { ws.send(JSON.stringify({ method: 'SUBSCRIBE', params: [`${sym}@aggTrade`], id: 7 })); } catch { finish(false); } };
+      ws.onmessage = (e) => { let m; try { m = JSON.parse(e.data); } catch { return; } if (m && ((m.id === 7 && m.result === null) || m.e === 'aggTrade')) finish(true); else if (m && m.id === 7) finish(false); };
+      ws.onerror = () => finish(false); ws.onclose = () => finish(false);
+    };
+    next();
   }
   _fail(reason) {
     const gen = this.gen;
     this.h.onStatus('error', reason, this.source);
     this.fails++;
+    // 刚切回 Binance 又断了 → 说明还不稳定，拉长下次探测间隔，避免来回切换
+    if (this.source === 'binance' && this.switchedBackAt && Date.now() - this.switchedBackAt < 90000) { this.probeEvery = Math.min(this.probeEvery * 2, PROBE_MAX); this.switchedBackAt = 0; }
     // Binance 先尝试备用域名
     if (this.source === 'binance' && this.binanceHost < BINANCE_HOSTS.length - 1 && !this.gotData) this.binanceHost++;
     else if (this.mode === 'auto' && (this.fails >= 2 || !this.gotData)) {
@@ -310,4 +350,50 @@ export async function fetchMiniTickers() {
   ];
   for (const f of tries) { try { return await f(); } catch {} }
   return null;
+}
+
+// OKX 最近成交（REST，每页 100 条，按 tradeId 往回翻页）：用于 OKX 数据源开页时回填 10秒/1分钟/5分钟 窗口和大单
+// 返回 { trades: 按时间升序 [{ ts, p, q, side(主动方) }], complete: 是否已覆盖到 sinceMs }
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+export async function fetchOkxTrades(m, sinceMs, maxPages = 12, alive = () => true) {
+  const out = []; let after = '', complete = false;
+  for (let i = 0; i < maxPages; i++) {
+    if (!alive()) return null;
+    let j;
+    try { j = await fetchJson(`https://www.okx.com/api/v5/market/history-trades?instId=${encodeURIComponent(m.okx)}&limit=100${after ? '&type=1&after=' + encodeURIComponent(after) : ''}`, 6000); }
+    catch { break; }
+    const d = j && Array.isArray(j.data) ? j.data : [];
+    if (!d.length) { complete = true; break; }
+    for (const t of d) { const ts = +t.ts, p = +t.px, q = +t.sz; if (ts > 0 && p > 0 && q > 0) out.push({ ts, p, q, side: t.side === 'sell' ? 'sell' : 'buy' }); }
+    const last = d[d.length - 1]; after = last.tradeId;
+    if (+last.ts < sinceMs) { complete = true; break; }
+    await sleep(150); // OKX 公共接口 20 次 / 2 秒
+  }
+  out.sort((a, b) => a.ts - b.ts);
+  return { trades: out, complete };
+}
+// Coinbase 最近成交（REST，每页最多 1000 条，用 cb-after 往回翻页）。side 是挂单方方向，主动方取反
+export async function fetchCoinbaseTrades(m, sinceMs, maxPages = 3, alive = () => true) {
+  const out = []; let after = '', complete = false;
+  for (let i = 0; i < maxPages; i++) {
+    if (!alive()) return null;
+    let d, nextAfter = '';
+    try {
+      const ctl = new AbortController(), to = setTimeout(() => ctl.abort(), 6000);
+      try {
+        const r = await fetch(`https://api.exchange.coinbase.com/products/${encodeURIComponent(m.coinbase)}/trades?limit=1000${after ? '&after=' + encodeURIComponent(after) : ''}`, { signal: ctl.signal });
+        if (!r.ok) break;
+        nextAfter = r.headers.get('cb-after') || ''; d = await r.json();
+      } finally { clearTimeout(to); }
+    } catch { break; }
+    if (!Array.isArray(d) || !d.length) { complete = true; break; }
+    let oldest = Infinity;
+    for (const t of d) { const ts = Date.parse(t.time), p = +t.price, q = +t.size; if (ts > 0 && p > 0 && q > 0) { out.push({ ts, p, q, side: t.side === 'sell' ? 'buy' : 'sell' }); if (ts < oldest) oldest = ts; } }
+    if (oldest < sinceMs) { complete = true; break; }
+    if (!nextAfter || nextAfter === after) break;
+    after = nextAfter;
+    await sleep(150);
+  }
+  out.sort((a, b) => a.ts - b.ts);
+  return { trades: out, complete };
 }

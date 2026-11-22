@@ -1,0 +1,19 @@
+{
+  "name": "Crypto War · 多空战场",
+  "short_name": "Crypto War",
+  "description": "900+ 币种实时多空对决：蓝军(多) vs 红军(空)。Live crypto bulls vs bears battle.",
+  "id": "/btc-battle/",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#070a14",
+  "theme_color": "#070a14",
+  "lang": "zh-CN",
+  "categories": ["finance", "entertainment"],
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

@@ -1,9 +1,9 @@
-import { FeedManager, SOURCES, fetchMiniTickers, fetchBinance1s, fetchBinanceAggTrades } from './feeds.js?v=ebdd6cab';
-import { PRESET, universe, loadUniverse, loadTickers, fetchQuoteVolume, thresholdsFor, search as searchCoins, topByVolume, recents, pushRecent, favorites, toggleFav, primarySource } from './markets.js?v=ebdd6cab';
-import { Battle } from './battle.js?v=ebdd6cab';
-import { t as T, lang, setLang, onLang, applyI18n, fmtUsd, fmtShort, fmtNum } from './i18n.js?v=ebdd6cab';
-import { AudioController } from './music.js?v=ebdd6cab';
-import { initChat } from './chat.js?v=ebdd6cab';
+import { FeedManager, SOURCES, fetchMiniTickers, fetchBinance1s, fetchBinanceAggTrades, fetchOkxTrades, fetchCoinbaseTrades } from './feeds.js?v=acad4705';
+import { PRESET, universe, loadUniverse, loadTickers, fetchQuoteVolume, thresholdsFor, search as searchCoins, topByVolume, recents, pushRecent, favorites, toggleFav, primarySource } from './markets.js?v=acad4705';
+import { Battle } from './battle.js?v=acad4705';
+import { t as T, lang, setLang, onLang, applyI18n, fmtUsd, fmtShort, fmtNum, escH } from './i18n.js?v=acad4705';
+import { AudioController } from './music.js?v=acad4705';
+import { initChat } from './chat.js?v=acad4705';
 
 const $ = (id) => document.getElementById(id);
 const pad = (n) => String(n).padStart(2, '0');
@@ -61,7 +61,7 @@ const S = {
   buckets: new Array(300).fill(null).map(() => ({ sec: 0, b: 0, s: 0, bu: 0, su: 0, n: 0 })),
   px: new Array(120).fill(null).map(() => ({ sec: 0, p: 0 })), tickDir: 0,
   book: null, threshold: 0, surge: null, surgeSince: 0, wonFor: null,
-  big: [], bigFrom: 0, bigLoading: false, lastAggId: 0,
+  big: [], bigFrom: 0, bigLoading: false, lastAggId: 0, lastTs: 0,
   since: 0, liveSec: null, bfGen: 0, // since: 统计窗口最早的完整秒；liveSec: 本次连接首笔实时成交所在秒
 };
 function resetStats() {
@@ -72,7 +72,7 @@ function resetStats() {
   S.since = 0; S.liveSec = null; S.bfGen++; S.nEma = 0;
   $('price').textContent = '--'; $('chg').textContent = '--'; $('chg').className = 'chg';
   ['hi', 'lo', 'vol'].forEach(id => $(id).textContent = '--');
-  S.big = []; S.bigFrom = 0; S.bigLoading = false; S.lastAggId = 0; pend = null; clearTimeout(pendTimer);
+  S.big = []; S.bigFrom = 0; S.bigLoading = false; S.lastAggId = 0; S.lastTs = 0; pend = null; clearTimeout(pendTimer);
   renderTrades();
 }
 function bucket(sec) {
@@ -113,9 +113,14 @@ function onTrade(t, src) {
     if (src === 'binance') {
       setTimeout(backfill, 1500, S.bfGen, t.ts, Date.now() - t.ts, sec);
       if (t.id) { S.bigLoading = !S.big.length; backfillBig(S.bfGen, t.id, S.lastAggId); if (S.bigLoading) renderTrades(); }
+    } else if ((src === 'okx' || src === 'coinbase') && t.ts > 0) {
+      // OKX / Coinbase 没有 1 秒 K 线，用最近逐笔成交回填窗口和大单
+      S.bigLoading = !S.big.length; if (S.bigLoading) renderTrades();
+      setTimeout(backfillTrades, 1200, S.bfGen, src, t.ts, Date.now() - t.ts, sec, S.lastTs);
     }
   }
   if (t.id) S.lastAggId = t.id;
+  if (t.ts > 0) S.lastTs = t.ts;
   if (t.side === 'buy') { bk.b += t.qty; bk.bu += usd; } else { bk.s += t.qty; bk.su += usd; }
   bk.n++;
   if (S.last && t.price !== S.last) { S.tickDir = t.price > S.last ? 1 : -1; audio.tick(S.tickDir); } // 价格每跳一下 → 旋律走一步
@@ -199,6 +204,50 @@ async function backfill(gen, firstTs, skew, liveSec) {
     if (ls > now - 120 && x.v > 0) { const ph = S.px[ls % 120]; if (ph.sec !== ls) { ph.sec = ls; ph.p = x.c; } }
     if (!S.since || ls < S.since) S.since = ls;
   }
+}
+
+// OKX / Coinbase：用最近逐笔成交回填 10秒/1分钟/5分钟 窗口与大单（重连时只补断线期间）
+async function backfillTrades(gen, src, firstTs, skew, liveSec, prevTs) {
+  if (gen !== S.bfGen) return;
+  const since = Math.max(firstTs - 300000, prevTs || 0), alive = () => gen === S.bfGen;
+  let r = null;
+  try { r = src === 'okx' ? await fetchOkxTrades(M, since, 12, alive) : await fetchCoinbaseTrades(M, since, 3, alive); } catch { r = null; }
+  if (gen !== S.bfGen) return;
+  S.bigLoading = false;
+  if (!r) { renderTrades(); return; }
+  let tr = r.trades.filter(x => x.ts < firstTs && x.ts >= since && (!prevTs || x.ts > prevTs));
+  // 没翻到 since 就停了：最早那一秒可能不完整，丢掉
+  if (!r.complete && tr.length) { const cut = (Math.floor(tr[0].ts / 1000) + 1) * 1000; tr = tr.filter(x => x.ts >= cut); }
+  const now = Math.floor(Date.now() / 1000), agg = new Map();
+  for (const x of tr) {
+    const ls = Math.floor((x.ts + skew) / 1000);
+    if (ls >= liveSec || ls <= now - 300) continue;
+    let a = agg.get(ls); if (!a) agg.set(ls, a = { b: 0, s: 0, bu: 0, su: 0, n: 0, p: 0 });
+    const usd = x.p * x.q;
+    if (x.side === 'buy') { a.b += x.q; a.bu += usd; } else { a.s += x.q; a.su += usd; }
+    a.n++; a.p = x.p; // 升序 → 该秒最后成交价
+  }
+  for (const [ls, a] of agg) {
+    const b = S.buckets[ls % 300];
+    if (b.sec !== ls) { b.sec = ls; b.b = a.b; b.s = a.s; b.bu = a.bu; b.su = a.su; b.n = a.n; }
+    if (ls > now - 120) { const ph = S.px[ls % 120]; if (ph.sec !== ls) { ph.sec = ls; ph.p = a.p; } }
+  }
+  if (!prevTs) { // 统计窗口起点：翻到了 since 就从 since 算起（冷门币中间没成交的秒也算覆盖），否则从最早完整的一秒算起
+    const from = r.complete ? Math.floor((since + skew) / 1000) + 1 : tr.length ? Math.floor((tr[0].ts + skew) / 1000) : 0;
+    if (from && from < liveSec && (!S.since || from < S.since)) S.since = Math.max(from, now - 299);
+  }
+  // 大单：同毫秒同方向合并为一笔主动单
+  const out = []; let cur = null;
+  for (const x of tr) {
+    const usd = x.p * x.q;
+    if (cur && cur.ts === x.ts && cur.side === x.side) { cur.qty += x.q; cur.usd += usd; cur.price = cur.usd / cur.qty; }
+    else { if (cur) out.push(cur); cur = { ts: x.ts, side: x.side, price: x.p, qty: x.q, usd }; }
+  }
+  if (cur) out.push(cur);
+  const min = cfg().chips[0], old = out.filter(x => x.usd >= min);
+  if (old.length) S.big = S.big.concat(old).sort((a, b) => b.ts - a.ts).slice(0, 500);
+  if (!prevTs && (r.complete || tr.length)) S.bigFrom = Math.min(S.bigFrom || Infinity, r.complete ? since : tr[0].ts);
+  renderTrades();
 }
 
 // ---------- 数据源 ----------
@@ -287,7 +336,7 @@ async function setCoin(id, { push = true, first = false } = {}) {
   tabs.forEach(b => { b.classList.toggle('on', b.dataset.coin === key); b.setAttribute('aria-selected', b.dataset.coin === key); });
   for (const o of sel.options) o.disabled = o.value !== 'auto' && !m[o.value]; // 没上这个交易所的币禁用该数据源
   battle.setThresholds(CF.th);
-  if (!first) { battle.reset(); showBanner(T('toCoin', m.base), 'gold', 1600, true); }
+  if (!first) { battle.reset(); showBanner(T('toCoin', escH(m.base)), 'gold', 1600, true); }
   renderChips(); resetStats(); S.src = null;
   if (m.last > 0) S.last = m.last; // 冷门币可能几十秒没有成交 / 行情推送：先用搜索列表里的最新价（≤60 秒前），有成交后立即替换
   $('pair').textContent = `${m.base}/${SOURCES[primarySource(m)].quote}`;
@@ -518,7 +567,7 @@ function refresh() {
   musicMood = 0.7 * (0.5 * p10 + 0.5 * p60) + 0.3 * smoothS;
   audio.update({ intensity: S.surge ? Math.max(musicI, 0.85) : musicI, bias: musicMood, surge: S.surge, bpm: S.surge ? Math.max(124, musicBpm) : musicBpm });
   updateMusicInd();
-  S.dbg = { musicI, musicBpm, musicMood, t: Date.now(), price: S.last, ch10, ch60, p10, p60, i10, i60, ib, raw, s: smoothS, front: battle.front, target: battle.frontTarget, actB: w10.bu / ref, actR: w10.su / ref, w10, w60, w300, coin, th: CF.th };
+  S.dbg = { src: S.src, since: S.since, musicI, musicBpm, musicMood, t: Date.now(), price: S.last, ch10, ch60, p10, p60, i10, i60, ib, raw, s: smoothS, front: battle.front, target: battle.frontTarget, actB: w10.bu / ref, actR: w10.su / ref, w10, w60, w300, coin, th: CF.th };
   const pc = (v) => `<b class="${v >= 0 ? 'c-blue' : 'c-red'}">${v >= 0 ? '+' : ''}${v.toFixed(3)}%</b>`;
   const rt = (v) => { const b = Math.round((v + 1) * 50); return `<b><span class="c-blue">${b}</span>:<span class="c-red">${100 - b}</span></b>`; };
   const bi = (x) => `<span class="bi">${x}</span>`;
@@ -561,7 +610,8 @@ setInterval(refresh, 400);
 const audio = new AudioController();
 window.__audio = audio; // 调试用
 const AKEY = 'cw_audio2'; // v2：默认开启（忽略旧版“默认关闭”时存下的设置）
-const AP = Object.assign({ music: true, sfx: true, vol: 75 }, JSON.parse(localStorage.getItem(AKEY) || '{}'));
+let AP0 = {}; try { AP0 = JSON.parse(localStorage.getItem(AKEY) || '{}') || {}; } catch {} // 存储损坏时用默认值，不让整页崩掉
+const AP = Object.assign({ music: true, sfx: true, vol: 75 }, AP0);
 const audioBtn = $('audioBtn'), pop = $('audioPop'), mInd = $('musicInd');
 $('musicTog').checked = AP.music; $('sfxTog').checked = AP.sfx; $('volRange').value = AP.vol;
 function moodLabel() {
@@ -699,7 +749,10 @@ function fitHeader() {
 }
 window.addEventListener('resize', fitHeader);
 document.fonts && document.fonts.ready.then(fitHeader);
-setTimeout(fitHeader, 0); setInterval(() => { if (!document.hidden) fitHeader(); }, 500); // 状态/配乐指示文字长度会变
+let fitSig = '';
+setTimeout(fitHeader, 0);
+// 状态/配乐指示文字长度会变：只在文字或宽度真的变了才重新排版（以前每 500ms 强制重排一次）
+setInterval(() => { if (document.hidden) return; const sig = $('statusText').textContent + '|' + mInd.textContent + '|' + $('cur-sym').textContent + '|' + innerWidth; if (sig !== fitSig) { fitSig = sig; fitHeader(); } }, 500);
 
 // ---------- 语言切换 ----------
 document.querySelectorAll('[data-lang]').forEach(b => b.onclick = (e) => { e.stopPropagation(); setLang(b.dataset.lang); });

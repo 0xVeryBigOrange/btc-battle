@@ -1,5 +1,5 @@
 // 战场动画：Canvas 2D，蓝军（多）在左，红军（空）在右
-import { t as tr, fmtUsd } from './i18n.js?v=ebdd6cab';
+import { t as tr, fmtUsd } from './i18n.js?v=acad4705';
 const TAU = Math.PI * 2;
 const rand = (a, b) => a + Math.random() * (b - a);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -41,6 +41,21 @@ function makeSmoke(size = 64) {
 }
 
 const RM = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null;
+// 画质档位：0 高 / 1 中 / 2 低。手机或低配设备从“中”起步；运行中帧率持续偏低会自动再降一档（不会自动回升，避免来回跳）
+const QUALITY = [
+  { dpr: 2, parts: 1400, smoke: 220, pk: 1, fog: true },
+  { dpr: 1.5, parts: 800, smoke: 130, pk: 0.65, fog: true },
+  { dpr: 1, parts: 420, smoke: 70, pk: 0.4, fog: false },
+];
+function initialQuality() {
+  try {
+    const q = new URLSearchParams(location.search).get('quality');
+    if (q === 'high') return 0; if (q === 'medium') return 1; if (q === 'low') return 2;
+  } catch {}
+  const coarse = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+  const cores = navigator.hardwareConcurrency || 4, mem = navigator.deviceMemory || 8;
+  return (coarse && Math.min(screen.width, screen.height) < 820) || cores <= 4 || mem <= 4 ? 1 : 0;
+}
 export class Battle {
   constructor(canvas) {
     this.cv = canvas; this.ctx = canvas.getContext('2d');
@@ -49,6 +64,7 @@ export class Battle {
     this.rings = []; this.texts = []; this.scorch = []; this.streaks = []; this.embers = [];
     this.shake = 0; this.flash = 0; this.flashCol = '255,255,255'; this.t = 0;
     this.pending = { blue: 0, red: 0 }; this.intensity = 0; this.queue = [];
+    this.q = initialQuality(); this.Q = QUALITY[this.q]; this.fpsN = 0; this.fpsT = 0; this.slowWins = 0;
     this.th = { small: 4000, shell: 50000, heavy: 250000, whale: 1e6 }; this.activity = { blue: 0, red: 0 }; this.popAcc = { blue: 0, red: 0 }; this.zoom = 1; this.celebrateT = 0;
     this.sprites = {
       blue: makeGlow(...COL.blue.glow), red: makeGlow(...COL.red.glow),
@@ -65,7 +81,7 @@ export class Battle {
   // ---------- 布局 ----------
   resize() {
     const r = this.cv.getBoundingClientRect();
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const dpr = Math.min(window.devicePixelRatio || 1, this.Q.dpr);
     if (!r.width || !r.height) return;
     this.W = r.width; this.H = r.height; this.dpr = dpr;
     this.cv.width = Math.round(r.width * dpr); this.cv.height = Math.round(r.height * dpr);
@@ -254,7 +270,7 @@ export class Battle {
     for (let i = 0; i < 6 * k; i++) this._smoke(x, y, rand(6, 12) * k, rand(-20, 20), rand(-30, -10));
   }
   _smoke(x, y, size, vx = rand(-12, 12), vy = rand(-26, -8), life = rand(1.4, 2.6)) {
-    if (this.smoke.length > 220) this.smoke.shift();
+    if (this.smoke.length > this.Q.smoke) this.smoke.shift();
     this.smoke.push({ x, y, vx, vy, size, life, max: life, rot: rand(0, TAU) });
   }
   explode(x, y, side, power, opts = {}) {
@@ -265,16 +281,16 @@ export class Battle {
     this.parts.push({ type: 'glow', spr: 'white', x, y, vx: 0, vy: 0, life: 0.25, max: 0.25, size: R * 2.2, add: true });
     this.parts.push({ type: 'glow', spr: 'fire', x, y, vx: 0, vy: 0, life: 0.55, max: 0.55, size: R * 3, add: true, grow: 1.5 });
     this.parts.push({ type: 'glow', spr, x, y, vx: 0, vy: 0, life: 0.8, max: 0.8, size: R * 3.4, add: true, grow: 1.2 });
-    const n = Math.min(14 + power * 10, 90);
+    const n = Math.round(Math.min(14 + power * 10, 90) * this.Q.pk);
     for (let i = 0; i < n; i++) {
       const a = rand(Math.PI, TAU) + rand(-0.3, 0.3), sp = rand(60, 160) * (0.6 + power * 0.25);
       this.parts.push({ type: 'spark', x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: rand(0.4, 1.0), max: 1, col: Math.random() < 0.5 ? '#ffd27a' : colOf(side).light, w: rand(1, 2.4) });
     }
-    for (let i = 0; i < Math.min(4 + power * 2, 20); i++) {
+    for (let i = 0; i < Math.min(4 + power * 2, 20) * this.Q.pk; i++) {
       const a = rand(Math.PI * 1.1, Math.PI * 1.9), sp = rand(80, 220);
       this.parts.push({ type: 'debris', x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: rand(0.8, 1.6), max: 1.6, s: rand(1.5, 3.5), rot: rand(0, TAU), vr: rand(-10, 10) });
     }
-    for (let i = 0; i < Math.min(5 + power * 3, 28); i++) this._smoke(x + rand(-R, R) * 0.6, y - rand(0, R * 0.6), rand(R * 0.5, R * 1.1), rand(-20, 20), rand(-40, -12), rand(1.6, 3.4));
+    for (let i = 0; i < Math.min(5 + power * 3, 28) * this.Q.pk; i++) this._smoke(x + rand(-R, R) * 0.6, y - rand(0, R * 0.6), rand(R * 0.5, R * 1.1), rand(-20, 20), rand(-40, -12), rand(1.6, 3.4));
     this.rings.push({ x, y, r: 4, max: R * (opts.whale ? 6 : 2.6), life: opts.whale ? 0.9 : 0.5, t: 0, col: colOf(side).glow });
     if (this.scorch.length > 40) this.scorch.shift();
     this.scorch.push({ x, y, r: R * 0.9, life: 14 });
@@ -290,11 +306,32 @@ export class Battle {
   start() {
     let last = performance.now();
     const loop = (now) => {
-      const dt = Math.min((now - last) / 1000, 0.05); last = now;
-      if (this.W) { this.update(dt); this.draw(); }
+      const raw = now - last, dt = Math.min(raw / 1000, 0.05); last = now;
+      if (this.W) { this.update(dt); this.draw(); this._fps(raw); }
       requestAnimationFrame(loop);
     };
     requestAnimationFrame(loop);
+  }
+
+  // 帧率监测：每 3 秒统计一次，连续 2 次低于 40 帧就降一档画质（切后台回来的超长帧不计入）
+  _fps(ms) {
+    if (this.q >= QUALITY.length - 1 || document.hidden) return;
+    if (ms > 1000) { this.fpsN = 0; this.fpsT = 0; return; } // 超过 1 秒的帧多半是切后台 / 休眠回来，不计入
+    this.fpsN++; this.fpsT += ms;
+    if (this.fpsT < 3000) return;
+    const fps = this.fpsN * 1000 / this.fpsT; this.fpsN = 0; this.fpsT = 0;
+    this.lastFps = Math.round(fps);
+    if (fps < 40) { if (++this.slowWins >= 2) { this.slowWins = 0; this.setQuality(this.q + 1); } }
+    else this.slowWins = 0;
+  }
+  setQuality(q) {
+    q = clamp(q | 0, 0, QUALITY.length - 1); if (q === this.q) return;
+    this.q = q; this.Q = QUALITY[q];
+    if (this.parts.length > this.Q.parts) this.parts.splice(0, this.parts.length - this.Q.parts);
+    if (this.smoke.length > this.Q.smoke) this.smoke.splice(0, this.smoke.length - this.Q.smoke);
+    if (q >= 2 && this.embers.length > 18) this.embers.length = 18;
+    this.resize();
+    this.onQuality && this.onQuality(q);
   }
 
   _processQueue() {
@@ -450,7 +487,7 @@ export class Battle {
       if (p.type === 'debris') { p.rot += p.vr * dt; if (p.y > this.H) p.life = 0; }
     }
     this.parts = this.parts.filter(p => p.life > 0);
-    if (this.parts.length > 1400) this.parts.splice(0, this.parts.length - 1400);
+    if (this.parts.length > this.Q.parts) this.parts.splice(0, this.parts.length - this.Q.parts);
     for (const s of this.smoke) { s.life -= dt; s.x += s.vx * dt; s.y += s.vy * dt; s.vx *= 0.99; s.size += dt * 10; }
     this.smoke = this.smoke.filter(s => s.life > 0);
     for (const r of this.rings) r.t += dt;
@@ -495,7 +532,7 @@ export class Battle {
     ctx.drawImage(this._mtnNear, -this.PAD - cam * 0.5, 0, W + this.PAD * 2, this.horizon + 4);
     this._drawLightning();
     // 地平线雾
-    for (const f of this.fog) {
+    if (this.Q.fog) for (const f of this.fog) {
       ctx.globalAlpha = f.a; ctx.drawImage(this.sprites.smoke, f.x - f.w / 2 - cam * 0.6, this.horizon - f.h * 0.45, f.w, f.h);
     }
     ctx.globalAlpha = 1;

@@ -1,6 +1,6 @@
-import { fetchJson, binFetch } from './net.js?v=ebdd6cab';
+import { fetchJson, binFetch } from './net.js?v=acad4705';
 // 币种宇宙：Binance（USDT 现货）为主，OKX（USDT 现货）、Coinbase（USD）补充；本地缓存 + 24h 行情排序
-const UKEY = 'cw_univ_v1', UTTL = 12 * 3600e3;
+const UKEY = 'cw_univ_v2', UTTL = 12 * 3600e3;
 const BIN_REST = ['https://api.binance.com', 'https://data-api.binance.vision'];
 
 async function binJson(path, ms, w) {
@@ -30,6 +30,7 @@ let univPromise = null;
 export function loadUniverse(force = false) {
   if (univPromise && !force) return univPromise;
   univPromise = (async () => {
+    try { localStorage.removeItem('cw_univ_v1'); } catch {} // 旧版缓存（含股票代币）
     try {
       const c = JSON.parse(localStorage.getItem(UKEY) || 'null');
       if (!force && c && Date.now() - c.t < UTTL && c.d && c.d.length > 50) { ingest(c.d); refreshUniverse(); return universe; }
@@ -46,13 +47,19 @@ async function refreshUniverse() {
   ]);
   const rows = new Map(); // base → [base, binSym, okxSym, cbSym, dp, qdp]
   const get = (base) => { let r = rows.get(base); if (!r) rows.set(base, r = [base, '', '', '', -1, -1]); return r; };
+  // 股票代币：OKX 有分类字段（instCategory 3，如 XAAPL）；Binance 没有，但同一批股票在 Binance 叫 AAPLB、TSLAB……
+  // 用 OKX 的股票清单反推，Binance 上“股票代码 + B”的也不进列表
+  const stk = new Set();
+  if (o.status === 'fulfilled') for (const i of o.value.data || []) if (String(i.instCategory) === '3' && /^X/.test(i.baseCcy)) stk.add(i.baseCcy.slice(1));
   if (b.status === 'fulfilled') for (const s of b.value.symbols) {
     if (s.quoteAsset !== 'USDT' || s.status !== 'TRADING' || s.isSpotTradingAllowed === false) continue;
+    if (/B$/.test(s.baseAsset) && stk.has(s.baseAsset.slice(0, -1))) continue;
     const r = get(s.baseAsset), pf = s.filters.find(f => f.filterType === 'PRICE_FILTER'), lf = s.filters.find(f => f.filterType === 'LOT_SIZE');
     r[1] = s.symbol; r[4] = pf ? dec(pf.tickSize) : 4; r[5] = lf ? dec(lf.stepSize) : 4;
   }
   if (o.status === 'fulfilled') for (const i of o.value.data || []) {
-    if (i.quoteCcy !== 'USDT' || i.state !== 'live') continue;
+    // instCategory 3 = OKX 股票代币（xAAPL、xTSLA 等美股映射），不是加密货币，不进币种列表
+    if (i.quoteCcy !== 'USDT' || i.state !== 'live' || String(i.instCategory) === '3') continue;
     const r = get(i.baseCcy); r[2] = i.instId; if (r[4] < 0) { r[4] = dec(i.tickSz); r[5] = dec(i.lotSz); }
   }
   if (cb.status === 'fulfilled' && Array.isArray(cb.value)) for (const p of cb.value) {
