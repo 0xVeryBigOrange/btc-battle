@@ -41,7 +41,7 @@
 <!-- 网页字体异步加载，不阻塞渲染；加载失败时使用系统字体 -->
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Ma+Shan+Zheng&family=JetBrains+Mono:wght@500;700;800&display=swap" media="print" id="gfonts" />
 <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Ma+Shan+Zheng&family=JetBrains+Mono:wght@500;700;800&display=swap" /></noscript>
-<link rel="stylesheet" href="style.css?v=932ab4a1" />
+<link rel="stylesheet" href="style.css?v=328eaf15" />
 </head>
 <body>
 <!-- 开场 -->
@@ -75,14 +75,14 @@
     </a>
   </div>
 
-  <nav class="coin-tabs" id="coinTabs" role="tablist">
-    <span class="tab-ind" id="tabInd"></span>
-    <button role="tab" data-coin="btc"><span class="ct-sym">₿ BTC</span><span class="ct-px" id="mini-btc">--</span><span class="ct-ch" id="minich-btc"></span></button>
-    <button role="tab" data-coin="eth"><span class="ct-sym">Ξ ETH</span><span class="ct-px" id="mini-eth">--</span><span class="ct-ch" id="minich-eth"></span></button>
-    <button role="tab" data-coin="cur" id="tab-cur" hidden><span class="ct-sym" id="cur-sym">--</span><span class="ct-px" id="mini-cur">--</span><span class="ct-ch" id="minich-cur"></span></button>
-    <button type="button" class="search-btn" id="searchBtn" data-i18n-title="searchKey" data-i18n-aria="search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><span class="sb-txt" data-i18n="search">搜索币种</span><kbd>/</kbd></button>
+  <nav class="coin-tabs" id="coinTabs" aria-label="币种" data-i18n-aria="coinNav">
+    <span class="tab-ind" id="tabInd" aria-hidden="true"></span>
+    <button type="button" data-coin="btc" aria-pressed="false"><span class="ct-sym">₿ BTC</span><span class="ct-px" id="mini-btc">--</span><span class="ct-ch" id="minich-btc"></span></button>
+    <button type="button" data-coin="eth" aria-pressed="false"><span class="ct-sym">Ξ ETH</span><span class="ct-px" id="mini-eth">--</span><span class="ct-ch" id="minich-eth"></span></button>
+    <button type="button" data-coin="cur" id="tab-cur" aria-pressed="false" hidden><span class="ct-sym" id="cur-sym">--</span><span class="ct-px" id="mini-cur">--</span><span class="ct-ch" id="minich-cur"></span></button>
+    <button type="button" class="search-btn" id="searchBtn" aria-haspopup="dialog" aria-expanded="false" aria-controls="searchPop" data-i18n-title="searchKey" data-i18n-aria="search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><span class="sb-txt" data-i18n="search">搜索币种</span><kbd>/</kbd></button>
   </nav>
-  <div class="search-pop" id="searchPop" hidden>
+  <div class="search-pop" id="searchPop" role="dialog" aria-label="搜索币种" data-i18n-aria="search" hidden>
     <div class="sp-head">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
       <input id="searchIn" type="search" autocomplete="off" autocapitalize="characters" spellcheck="false" enterkeyhint="go" data-i18n-ph="searchPh" data-i18n-aria="search" role="combobox" aria-controls="searchList" aria-expanded="true" />
@@ -243,6 +243,6 @@
   </div>
   <p class="disclaimer" data-i18n="disclaimer">数据来自 Binance / OKX / Coinbase 公共行情（无需 API Key），仅供娱乐参考，不构成投资建议 · 蓝 = 多 / 买方，红 = 空 / 卖方</p>
 </footer>
-<script type="module" src="js/app.js?v=932ab4a1"></script>
+<script type="module" src="js/app.js?v=328eaf15"></script>
 </body>
 </html>

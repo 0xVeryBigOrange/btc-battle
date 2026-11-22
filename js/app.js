@@ -1,9 +1,9 @@
-import { FeedManager, SOURCES, fetchMiniTickers, fetchBinance1s, fetchBinanceAggTrades, fetchOkxTrades, fetchCoinbaseTrades } from './feeds.js?v=932ab4a1';
-import { PRESET, universe, loadUniverse, loadTickers, fetchQuoteVolume, thresholdsFor, search as searchCoins, topByVolume, recents, pushRecent, favorites, toggleFav, primarySource } from './markets.js?v=932ab4a1';
-import { Battle } from './battle.js?v=932ab4a1';
-import { t as T, lang, setLang, onLang, applyI18n, fmtUsd, fmtShort, fmtNum, escH } from './i18n.js?v=932ab4a1';
-import { AudioController } from './music.js?v=932ab4a1';
-import { initChat } from './chat.js?v=932ab4a1';
+import { FeedManager, SOURCES, fetchMiniTickers, fetchBinance1s, fetchBinanceAggTrades, fetchOkxTrades, fetchCoinbaseTrades } from './feeds.js?v=328eaf15';
+import { PRESET, universe, loadUniverse, loadTickers, fetchQuoteVolume, thresholdsFor, search as searchCoins, topByVolume, recents, pushRecent, favorites, toggleFav, primarySource } from './markets.js?v=328eaf15';
+import { Battle } from './battle.js?v=328eaf15';
+import { t as T, lang, setLang, onLang, applyI18n, fmtUsd, fmtShort, fmtNum, escH } from './i18n.js?v=328eaf15';
+import { AudioController } from './music.js?v=328eaf15';
+import { initChat } from './chat.js?v=328eaf15';
 
 const $ = (id) => document.getElementById(id);
 const pad = (n) => String(n).padStart(2, '0');
@@ -333,7 +333,7 @@ async function setCoin(id, { push = true, first = false } = {}) {
   const key = tabKey(id);
   $('tab-cur').hidden = key !== 'cur';
   if (key === 'cur') { $('cur-sym').textContent = m.base; $('mini-cur').textContent = m.last ? fmtPx(m.last, CF.dp) : '--'; $('minich-cur').textContent = ''; }
-  tabs.forEach(b => { b.classList.toggle('on', b.dataset.coin === key); b.setAttribute('aria-selected', b.dataset.coin === key); });
+  tabs.forEach(b => { b.classList.toggle('on', b.dataset.coin === key); b.setAttribute('aria-pressed', b.dataset.coin === key); });
   for (const o of sel.options) o.disabled = o.value !== 'auto' && !m[o.value]; // 没上这个交易所的币禁用该数据源
   battle.setThresholds(CF.th);
   if (!first) { battle.reset(); showBanner(T('toCoin', escH(m.base)), 'gold', 1600, true); }
@@ -698,12 +698,12 @@ function setAct(i) {
   const el = sList.querySelector(`.sp-row[data-i="${sAct}"]`); if (el) el.scrollIntoView({ block: 'nearest' });
 }
 function openSearch(q = '') {
-  sPop.hidden = false; sIn.setAttribute('aria-expanded', 'true'); sIn.value = q; sAct = 0; renderSearch();
+  sPop.hidden = false; sIn.setAttribute('aria-expanded', 'true'); $('searchBtn').setAttribute('aria-expanded', 'true'); sIn.value = q; sAct = 0; renderSearch();
   setTimeout(() => sIn.focus(), 0);
   loadUniverse().then(renderSearch).catch(() => {});
   loadTickers().then(() => { if (!sPop.hidden) renderSearch(); }).catch(() => {}); // 60 秒内只拉一次
 }
-function closeSearch() { sPop.hidden = true; sIn.setAttribute('aria-expanded', 'false'); sIn.blur(); }
+function closeSearch() { sPop.hidden = true; sIn.setAttribute('aria-expanded', 'false'); $('searchBtn').setAttribute('aria-expanded', 'false'); sIn.blur(); }
 function pick(m) { if (!m) return; closeSearch(); setCoin(m.id); }
 $('searchBtn').onclick = (e) => { e.stopPropagation(); sPop.hidden ? openSearch() : closeSearch(); };
 $('searchClose').onclick = closeSearch;

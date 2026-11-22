@@ -1,6 +1,6 @@
 // 战场动画：Canvas 2D，蓝军（多）在左，红军（空）在右
-import { t as tr, fmtUsd } from './i18n.js?v=932ab4a1';
-import { makeUnitSprites, drawStandard, Fortress, UNIT } from './units.js?v=932ab4a1';
+import { t as tr, fmtUsd } from './i18n.js?v=328eaf15';
+import { makeUnitSprites, drawStandard, Fortress, UNIT } from './units.js?v=328eaf15';
 const TAU = Math.PI * 2;
 const rand = (a, b) => a + Math.random() * (b - a);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -77,26 +77,37 @@ export class Battle {
     };
     this.units = makeUnitSprites(COL);
     this.forts = { blue: new Fortress('blue', COL.blue), red: new Fortress('red', COL.red) };
-    this.resize = this.resize.bind(this);
-    window.addEventListener('resize', this.resize);
-    if (window.ResizeObserver) new ResizeObserver(this.resize).observe(canvas);
-    this.resize();
+    // 尺寸 / 像素比变化：合并到下一帧只重建一次（ResizeObserver 和 window resize 经常同时触发）
+    this._rzQ = 0; const rz = () => { if (!this._rzQ) this._rzQ = requestAnimationFrame(() => { this._rzQ = 0; this.resize(); }); };
+    window.addEventListener('resize', rz);
+    if (window.ResizeObserver) new ResizeObserver(rz).observe(canvas);
+    this._watchDpr = () => { // 窗口拖到另一块屏幕（像素比变了但不一定触发 resize）
+      if (typeof matchMedia !== 'function') return;
+      const mq = matchMedia(`(resolution: ${window.devicePixelRatio || 1}dppx)`);
+      const on = () => { mq.removeEventListener('change', on); rz(); this._watchDpr(); };
+      mq.addEventListener && mq.addEventListener('change', on);
+    };
+    this._watchDpr();
+    // 切到后台期间不积压成交：回来时不会一口气补放几百发炮弹 / 巨鲸警报
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) { this.queue = []; this.pending = { blue: 0, red: 0 }; } });
+    this.resize(true);
     this._initWeather();
     for (let i = 0; i < 40; i++) this.embers.push(this._ember(true));
   }
 
   // ---------- 布局 ----------
-  resize() {
+  resize(force) {
     const r = this.cv.getBoundingClientRect();
     const dpr = Math.min(window.devicePixelRatio || 1, this.Q.dpr);
     if (!r.width || !r.height) return;
+    if (force !== true && r.width === this.W && r.height === this.H && dpr === this.dpr) return; // 尺寸没变不重建缓存
     this.W = r.width; this.H = r.height; this.dpr = dpr;
     this.cv.width = Math.round(r.width * dpr); this.cv.height = Math.round(r.height * dpr);
     const oT = this.laneTop, oB = this.laneBot, oW = this.W0;
     this.horizon = this.H * 0.4; this.laneTop = this.H * 0.52; this.laneBot = this.H * 0.93;
     if (oT != null && oB > oT) for (const s of this.soldiers) { s.y = this.laneTop + (s.y - oT) / (oB - oT) * (this.laneBot - this.laneTop); if (oW) s.x *= this.W / oW; }
     this.W0 = this.W;
-    this.baseL = Math.max(34, this.W * 0.055); this.baseR = this.W - this.baseL;
+    this.baseL = Math.max(34, this.W * 0.055, 50 * clamp(this.H / 500, 0.5, 1.15)); this.baseR = this.W - this.baseL; // 画布偏高（平板竖屏）时城堡外塔不被画布边缘切掉
     this.N = Math.round(clamp(this.W / 16, 22, 70));
     this.forts.blue.build(this.W, this.H, dpr, this.baseL, this.H * 0.66, this.baseL);
     this.forts.red.build(this.W, this.H, dpr, this.baseR, this.H * 0.66, this.W - this.baseR);
@@ -209,7 +220,10 @@ export class Battle {
   setThresholds(th) { Object.assign(this.th, th); }
   reset() {
     this.bullets = []; this.shells = []; this.parts = []; this.texts = []; this.queue = []; this.rings = [];
-    this.pending = { blue: 0, red: 0 }; this.front = this.frontTarget = 0.5; this.surge = null;
+    this.pending = { blue: 0, red: 0 }; this.front = this.frontTarget = 0.5; this.surge = null; this.surgeT = 0; this.lastSurge = null;
+    this.smoke = []; this.scorch = []; this.celebrateT = 0; this.shake = 0; this.flash = 0; this.intensity = 0;
+    // 换币后两边城堡立即恢复完好（不沿用上一个币的战损）
+    for (const f of Object.values(this.forts)) { f.dmg = 0; f.glow = 0.6; }
   }
   // 胜利烟花
   celebrate(side) {
@@ -230,6 +244,7 @@ export class Battle {
   setSurge(side) { this.surge = side; }
   /** side: 'buy'|'sell'; usd: 成交额 */
   fire(side, usd, qty) {
+    if (document.hidden) return; // 后台不播放（浏览器也会暂停动画），避免回到前台时集中爆发
     if (this.queue.length > 300) this.queue.shift();
     this.queue.push({ side: side === 'buy' ? 'blue' : 'red', usd, qty });
   }
@@ -438,7 +453,8 @@ export class Battle {
       const depth = surging ? s.d * 0.35 : s.d;
       let tx = fx - dir * (12 + depth * Math.abs(fx - base) * 0.82);
       if (surging) tx += dir * 10 * Math.sin(this.t * 3 + s.phase);
-      const dx = tx - s.x, sp = s.speed * (surging ? 2.2 : 1) * (Math.abs(dx) > 80 ? 1.6 : 1);
+      const behind = (s.x - fx) * dir > 8; // 前线快速后撤时，落在敌阵里的士兵跑步撤回，不在对方阵地里慢慢走
+      const dx = tx - s.x, sp = s.speed * (surging ? 2.2 : 1) * (behind ? 2.8 : Math.abs(dx) > 80 ? 1.6 : 1);
       s.moving = Math.abs(dx) > 3;
       s.x += clamp(dx, -sp * dt, sp * dt);
       s.phase += dt * (s.moving ? 11 : 2.5) * (surging ? 1.4 : 1);
