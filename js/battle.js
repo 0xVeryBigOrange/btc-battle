@@ -1,13 +1,18 @@
 // 战场动画：Canvas 2D，蓝军（多）在左，红军（空）在右
-import { t as tr, fmtUsd } from './i18n.js?v=acad4705';
+import { t as tr, fmtUsd } from './i18n.js?v=932ab4a1';
+import { makeUnitSprites, drawStandard, Fortress, UNIT } from './units.js?v=932ab4a1';
 const TAU = Math.PI * 2;
 const rand = (a, b) => a + Math.random() * (b - a);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const lerp = (a, b, t) => a + (b - a) * t;
 
 const COL = {
-  blue: { main: '#3b82f6', light: '#93c5fd', dark: '#1e3a8a', armor: '#1d4ed8', glow: [80, 150, 255] },
-  red: { main: '#ef4444', light: '#fca5a5', dark: '#7f1d1d', armor: '#b91c1c', glow: [255, 80, 70] },
+  blue: { main: '#3b82f6', light: '#93c5fd', dark: '#1e3a8a', armor: '#1d4ed8', glow: [80, 150, 255],
+    steelHi: '#9db4e6', cape: '#1d3a8a', capeDk: '#0b1638', gold: '#e8c56e', visor: '#bfe0ff',
+    stoneHi: '#2b3450', stoneLo: '#0f1322', rim: '#7fb0ff', roof: '#1c2c5c' },
+  red: { main: '#ef4444', light: '#fca5a5', dark: '#7f1d1d', armor: '#b91c1c', glow: [255, 80, 70],
+    steelHi: '#e6a4a4', cape: '#7a1717', capeDk: '#2e0808', gold: '#e8b45a', visor: '#ffd0c4',
+    stoneHi: '#3a2a35', stoneLo: '#150e14', rim: '#ff8f84', roof: '#5a1c22' },
 };
 
 const colOf = (side) => COL[side] || COL.blue;
@@ -70,6 +75,8 @@ export class Battle {
       blue: makeGlow(...COL.blue.glow), red: makeGlow(...COL.red.glow),
       fire: makeGlow(255, 160, 50), white: makeGlow(255, 240, 220), smoke: makeSmoke(), cloud: makeCloud(),
     };
+    this.units = makeUnitSprites(COL);
+    this.forts = { blue: new Fortress('blue', COL.blue), red: new Fortress('red', COL.red) };
     this.resize = this.resize.bind(this);
     window.addEventListener('resize', this.resize);
     if (window.ResizeObserver) new ResizeObserver(this.resize).observe(canvas);
@@ -91,6 +98,8 @@ export class Battle {
     this.W0 = this.W;
     this.baseL = Math.max(34, this.W * 0.055); this.baseR = this.W - this.baseL;
     this.N = Math.round(clamp(this.W / 16, 22, 70));
+    this.forts.blue.build(this.W, this.H, dpr, this.baseL, this.H * 0.66, this.baseL);
+    this.forts.red.build(this.W, this.H, dpr, this.baseR, this.H * 0.66, this.W - this.baseR);
     this._bg = this._renderBg();
     const strip = (c0, c1) => { const c = document.createElement('canvas'); c.width = 128; c.height = 1; const x = c.getContext('2d');
       const g = x.createLinearGradient(0, 0, 128, 0); g.addColorStop(0, c0); g.addColorStop(1, c1); x.fillStyle = g; x.fillRect(0, 0, 128, 1); return c; };
@@ -232,7 +241,7 @@ export class Battle {
     const fx = this.frontX(y);
     const d = Math.pow(Math.random(), 1.7);
     const x = atBase ? base + (side === 'blue' ? rand(-10, 20) : rand(-20, 10)) : lerp(fx, base, d * 0.8 + 0.1);
-    this.soldiers.push({ side, x, y, d, phase: rand(0, TAU), speed: rand(28, 48), cool: rand(0.3, 2.5), dead: false, dieT: 0, hit: 0, rot: 0 });
+    this.soldiers.push({ side, x, y, d, phase: rand(0, TAU), speed: rand(28, 48), cool: rand(0.3, 2.5), dead: false, dieT: 0, hit: 0, rot: 0, banner: Math.random() < 0.09 });
   }
   _killNear(side, x, y, r) { // 杀死 side 一方在 (x,y) 半径内的士兵
     let k = 0;
@@ -251,7 +260,7 @@ export class Battle {
   }
   _shell(side, usd, kind) {
     const blue = side === 'blue';
-    const sx = blue ? this.baseL + 18 : this.baseR - 18, sy = this.H * 0.6;
+    const [sx, sy] = this.forts[side].cannonPos(); // 从城堡前塔的炮台发射
     const ty = rand(this.laneTop, this.laneBot);
     const fx = this.frontX(ty);
     const ebase = blue ? this.baseR : this.baseL;
@@ -390,6 +399,12 @@ export class Battle {
     this.front = lerp(this.front, this.frontTarget, 1 - Math.exp(-dt * 1.4));
     this.intensity *= Math.exp(-dt * 0.8);
     this.surgeT = this.surge ? Math.min(this.surgeT + dt * 2, 1) : Math.max(this.surgeT - dt * 1.5, 0);
+    // 城堡状态跟随战况：被压制的一方城堡出现裂痕、起火冒烟、灯光变暗；占优 / 总攻的一方更亮
+    for (const side of ['blue', 'red']) {
+      const f = this.forts[side], share = side === 'blue' ? this.front : 1 - this.front;
+      f.update(dt, share, this.surge === side);
+      if (f.dmg > 0.3 && Math.random() < dt * f.dmg * 2.5 * this.Q.pk) { const [x, y] = f.smokeSpot(); this._smoke(x, y, rand(6, 12) * f.k, rand(-6, 6), rand(-22, -10), rand(2, 3.5)); }
+    }
     if (this.surge) this.lastSurge = this.surge;
     this._processQueue();
 
@@ -549,7 +564,9 @@ export class Battle {
       ctx.beginPath(); ctx.ellipse(s.x, s.y + 2, s.r, s.r * 0.32, 0, 0, TAU); ctx.fill();
     }
 
-    this._drawBase('blue'); this._drawBase('red');
+    const rm = !!(RM && RM.matches);
+    this.forts.blue.label = tr('flagL'); this.forts.red.label = tr('flagS');
+    this.forts.blue.draw(ctx, this.t, this.sprites, this.q, rm); this.forts.red.draw(ctx, this.t, this.sprites, this.q, rm);
     this._drawFrontLine();
 
     // 士兵按 y 排序（远小近大）
@@ -658,82 +675,29 @@ export class Battle {
     ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
   }
 
-  _drawBase(side) {
-    const { ctx, H } = this; const blue = side === 'blue';
-    const c = colOf(side); const x = blue ? this.baseL : this.baseR; const by = H * 0.66;
-    const w = clamp(this.W * 0.05, 30, 54), h = clamp(H * 0.32, 80, 170);
-    // 底部光晕
-    ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.6;
-    ctx.drawImage(this.sprites[side], x - w * 2, by - h * 0.9, w * 4, h * 1.6);
-    ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
-    // 塔身
-    const g = ctx.createLinearGradient(x - w / 2, 0, x + w / 2, 0);
-    g.addColorStop(0, '#0b1020'); g.addColorStop(blue ? 0.85 : 0.15, c.dark); g.addColorStop(1, '#0b1020');
-    ctx.fillStyle = g; ctx.beginPath();
-    ctx.moveTo(x - w / 2 - 6, by); ctx.lineTo(x - w / 2, by - h); 
-    const cren = 4; const cw = w / (cren * 2 - 1);
-    for (let i = 0; i < cren * 2 - 1; i++) {
-      const cx = x - w / 2 + i * cw; const up = i % 2 === 0;
-      ctx.lineTo(cx, by - h - (up ? 8 : 0)); ctx.lineTo(cx + cw, by - h - (up ? 8 : 0));
-    }
-    ctx.lineTo(x + w / 2, by - h); ctx.lineTo(x + w / 2 + 6, by); ctx.closePath(); ctx.fill();
-    ctx.strokeStyle = c.main; ctx.lineWidth = 1.5; ctx.globalAlpha = 0.8; ctx.stroke(); ctx.globalAlpha = 1;
-    // 窗户发光
-    for (let i = 0; i < 3; i++) {
-      const wy = by - h * (0.3 + i * 0.22); const fl = 0.6 + 0.4 * Math.sin(this.t * 4 + i * 2 + (blue ? 0 : 1));
-      ctx.fillStyle = `rgba(${c.glow.join(',')},${fl})`; ctx.fillRect(x - 3, wy, 6, 10);
-    }
-    // 大炮
-    const cy = H * 0.6, dir = blue ? 1 : -1;
-    ctx.save(); ctx.translate(x + dir * 10, cy); ctx.rotate(dir * -0.6); ctx.fillStyle = '#20263a';
-    ctx.fillRect(dir > 0 ? 0 : -26, -4, 26, 8); ctx.restore();
-    ctx.fillStyle = '#151a2b'; ctx.beginPath(); ctx.arc(x + dir * 10, cy + 3, 7, 0, TAU); ctx.fill();
-    // 旗帜
-    const px = x, py = by - h - 8;
-    ctx.strokeStyle = '#cbd5e1'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px, py - 46); ctx.stroke();
-    const fw = 40, fh = 26;
-    ctx.fillStyle = c.main; ctx.beginPath(); ctx.moveTo(px, py - 46);
-    for (let i = 0; i <= 10; i++) { const k = i / 10; ctx.lineTo(px + dir * fw * k, py - 46 + Math.sin(this.t * 5 - k * 4) * 3 * k); }
-    for (let i = 10; i >= 0; i--) { const k = i / 10; ctx.lineTo(px + dir * fw * k, py - 46 + fh + Math.sin(this.t * 5 - k * 4) * 3 * k); }
-    ctx.closePath(); ctx.fill();
-    ctx.fillStyle = '#fff'; ctx.font = '900 15px -apple-system, "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(blue ? tr('flagL') : tr('flagS'), px + dir * fw * 0.5, py - 46 + fh / 2 + Math.sin(this.t * 5 - 2) * 1.5);
-  }
-
   _drawSoldier(s) {
     const { ctx } = this; const c = colOf(s.side); const sc = this.scaleAt(s.y);
     const fade = s.dead ? clamp(1 - (s.dieT - 1.2), 0, 1) : 1;
     if (fade <= 0) return;
     const face = s.facing || (s.side === 'blue' ? 1 : -1);
+    const set = this.units[s.side] || this.units.blue;
+    const moving = s.moving && !s.dead;
+    const spr = moving ? set.walk[((Math.floor(s.phase / TAU * UNIT.FRAMES) % UNIT.FRAMES) + UNIT.FRAMES) % UNIT.FRAMES] : set.idle;
     ctx.save(); ctx.globalAlpha = fade;
     ctx.translate(s.x, s.y);
-    // 阴影
-    ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.beginPath(); ctx.ellipse(0, 0, 8 * sc, 2.6 * sc, 0, 0, TAU); ctx.fill();
+    // 脚下阴影 + 远处略暗（空气透视）
+    ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.beginPath(); ctx.ellipse(0, 0, 9 * sc, 2.8 * sc, 0, 0, TAU); ctx.fill();
     ctx.scale(sc * face, sc);
-    if (s.dead) ctx.rotate(-Math.abs(s.rot));
-    const walk = s.moving && !s.dead ? Math.sin(s.phase) : 0;
-    const bob = s.dead ? 0 : (s.moving ? Math.abs(Math.cos(s.phase)) * 1.5 : Math.sin(s.phase) * 0.5);
-    const rc = s.recoil ? s.recoil * 12 : 0;
-    ctx.translate(0, -bob);
-    // 腿
-    ctx.strokeStyle = '#0f1424'; ctx.lineWidth = 3; ctx.lineCap = 'round';
-    ctx.beginPath(); ctx.moveTo(0, -9); ctx.lineTo(walk * 5, 0); ctx.moveTo(0, -9); ctx.lineTo(-walk * 5, 0); ctx.stroke();
-    // 身体（铠甲）
-    ctx.fillStyle = c.armor; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(-4.5, -20, 9, 12, 3) : ctx.rect(-4.5, -20, 9, 12); ctx.fill();
-    ctx.fillStyle = c.light; ctx.globalAlpha = fade * 0.6; ctx.fillRect(1.5, -19, 2, 10); ctx.globalAlpha = fade;
-    // 枪
-    ctx.strokeStyle = '#cbd5e1'; ctx.lineWidth = 1.8;
-    ctx.beginPath(); ctx.moveTo(-2 - rc * 0.2, -15); ctx.lineTo(12 - rc * 0.3, -15 - (s.moving ? 2 : 0)); ctx.stroke();
-    // 头盔
-    ctx.fillStyle = '#f1d3b3'; ctx.beginPath(); ctx.arc(0, -24, 3.6, 0, TAU); ctx.fill();
-    ctx.fillStyle = c.main; ctx.beginPath(); ctx.arc(0, -25, 4.4, Math.PI, TAU); ctx.fill();
-    ctx.fillRect(-4.4, -25.5, 9.6, 1.6);
-    // 护目镜发光
-    ctx.fillStyle = c.light; ctx.fillRect(1.2, -24.5, 3, 1.4);
+    if (s.dead) { ctx.rotate(-Math.abs(s.rot)); ctx.globalAlpha = fade * 0.85; }
+    const bob = s.dead ? 0 : (moving ? 0 : Math.sin(s.phase) * 0.45);
+    const rc = s.recoil ? s.recoil * 10 : 0;
+    ctx.translate(-rc * 0.25, -bob);
+    if (s.banner && !s.dead) drawStandard(ctx, c, this.t, s.phase * 0.3, s.side === 'blue');
+    ctx.drawImage(spr, -UNIT.OX, -UNIT.OY, UNIT.W, UNIT.H);
     ctx.restore();
     if (this.surge === s.side && !s.dead) {
-      ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.45 * this.surgeT;
-      ctx.drawImage(this.sprites[s.side], s.x - 14 * sc, s.y - 30 * sc, 28 * sc, 36 * sc);
+      ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.4 * this.surgeT;
+      ctx.drawImage(this.sprites[s.side], s.x - 15 * sc, s.y - 36 * sc, 30 * sc, 42 * sc);
       ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
     }
   }
