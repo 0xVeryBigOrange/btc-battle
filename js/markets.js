@@ -1,4 +1,4 @@
-import { fetchJson, binFetch } from './net.js?v=328eaf15';
+import { fetchJson, binFetch } from './net.js?v=1a8cff89';
 // 币种宇宙：Binance（USDT 现货）为主，OKX（USDT 现货）、Coinbase（USD）补充；本地缓存 + 24h 行情排序
 const UKEY = 'cw_univ_v2', UTTL = 12 * 3600e3;
 const BIN_REST = ['https://api.binance.com', 'https://data-api.binance.vision'];
@@ -145,7 +145,7 @@ export function search(q, limit = 30) {
   return out.sort((a, b) => b[0] - a[0]).slice(0, limit).map(x => x[1]);
 }
 // 稳定币（价格锚定 1 美元，没有多空可看）不进“热门”，但仍可搜索
-const STABLE = new Set(['usdt', 'usdc', 'fdusd', 'tusd', 'usdp', 'dai', 'usde', 'usd1', 'pyusd', 'busd', 'usds', 'rlusd', 'eurc', 'eur', 'eurq', 'eurr', 'xusd', 'bfusd', 'usdg', 'aeur', 'gusd', 'usdd', 'frax']);
+const STABLE = new Set(['usdt', 'usdc', 'fdusd', 'tusd', 'usdp', 'dai', 'usde', 'usd1', 'pyusd', 'busd', 'usds', 'rlusd', 'eurc', 'eur', 'eurq', 'eurr', 'xusd', 'bfusd', 'usdg', 'aeur', 'gusd', 'usdd', 'frax', 'u', 'rwusd']);
 export function topByVolume(n = 12) {
   return [...universe.values()].filter(m => m.qv > 0 && !STABLE.has(m.id)).sort((a, b) => b.qv - a.qv).slice(0, n);
 }

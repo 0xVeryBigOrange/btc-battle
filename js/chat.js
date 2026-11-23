@@ -1,6 +1,6 @@
 // 匿名喊单评论区 + 弹幕：Supabase REST（读/写）+ Realtime WebSocket（postgres_changes INSERT），不依赖 SDK
 // 只使用公开的 publishable key；表开启 RLS，匿名只能读和发，数据库端限流（同 IP 3 秒 1 条 / 每分钟 10 条）
-import { t as T, onLang, lang as _lang } from './i18n.js?v=328eaf15';
+import { t as T, onLang, lang as _lang } from './i18n.js?v=1a8cff89';
 
 const SB_URL = 'https://gtdvykkdvpzsnhlqlgun.supabase.co';
 const SB_KEY = 'sb_publishable_i5XDXdgwAMTA0PHFCWTeew_qDAv9-pU';
@@ -247,7 +247,12 @@ export function initChat({ getCoin, battleHost }) {
   btns.forEach(b => b.addEventListener('click', () => post(b.dataset.chatSide)));
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.isComposing && e.keyCode !== 229) { e.preventDefault(); post('neutral'); } });
   function updCnt() { const n = Array.from(input.value).length; cnt.textContent = `${n}/${MAX_LEN}`; cnt.classList.toggle('warn', n > MAX_LEN - 20); }
-  input.addEventListener('input', updCnt); updCnt();
+  // maxlength 按 UTF-16 计数（emoji 算 2），这里按字符数截断，与计数器 / 数据库的 140 字一致
+  const clip = (e) => {
+    if (!(e && e.isComposing) && cpLen(input.value) > MAX_LEN) input.value = Array.from(input.value).slice(0, MAX_LEN).join('');
+    updCnt();
+  };
+  input.addEventListener('input', clip); input.addEventListener('compositionend', () => clip()); updCnt();
 
   // 弹幕开关
   const dmBtns = [...document.querySelectorAll('[data-dm-tog]')];
