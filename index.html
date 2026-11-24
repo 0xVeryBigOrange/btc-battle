@@ -41,7 +41,7 @@
 <!-- 网页字体异步加载，不阻塞渲染；加载失败时使用系统字体 -->
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Ma+Shan+Zheng&family=JetBrains+Mono:wght@500;700;800&display=swap" media="print" id="gfonts" />
 <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Ma+Shan+Zheng&family=JetBrains+Mono:wght@500;700;800&display=swap" /></noscript>
-<link rel="stylesheet" href="style.css?v=1a8cff89" />
+<link rel="stylesheet" href="style.css?v=15ed07a7" />
 </head>
 <body>
 <!-- 开场 -->
@@ -119,6 +119,7 @@
 </header>
 
 <main class="layout">
+  <h1 class="sr-only" data-i18n="h1">Crypto War · 多空战场：加密货币实时多空对决</h1>
   <section class="card price-card">
     <div class="price-left">
       <div class="price-head">
@@ -174,7 +175,7 @@
       <div class="rb-foot"><span class="c-blue" id="tk300buy">--</span><span class="c-red" id="tk300sell">--</span></div>
     </div>
     <div class="delta"><span data-i18n="delta">5 分钟净主动买入</span> <b id="delta">--</b></div>
-    <canvas id="flowChart" class="mini"></canvas>
+    <canvas id="flowChart" class="mini" role="img" aria-label="近 2 分钟主动买卖量柱状图（每 2 秒一根，向上蓝柱为买、向下红柱为卖，折线为累计净买入）" data-i18n-aria="flowAria"></canvas>
   </section>
 
   <section class="card book-card">
@@ -190,7 +191,7 @@
       <div class="rb-foot"><span class="c-blue" id="bk1bid">--</span><span class="c-red" id="bk1ask">--</span></div>
     </div>
     <div class="spread"><span data-i18n="bb">买一</span> <b class="c-blue" id="bb">--</b> · <span data-i18n="ba">卖一</span> <b class="c-red" id="ba">--</b> · <span data-i18n="spr">价差</span> <b id="spr">--</b></div>
-    <canvas id="depthChart" class="mini depth"></canvas>
+    <canvas id="depthChart" class="mini depth" role="img" aria-label="盘口累计深度图：左侧蓝色为买单，右侧红色为卖单" data-i18n-aria="depthAria"></canvas>
   </section>
 
   <section class="card trades-card">
@@ -243,6 +244,6 @@
   </div>
   <p class="disclaimer" data-i18n="disclaimer">数据来自 Binance / OKX / Coinbase 公共行情（无需 API Key），仅供娱乐参考，不构成投资建议 · 蓝 = 多 / 买方，红 = 空 / 卖方</p>
 </footer>
-<script type="module" src="js/app.js?v=1a8cff89"></script>
+<script type="module" src="js/app.js?v=15ed07a7"></script>
 </body>
 </html>

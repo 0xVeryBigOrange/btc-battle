@@ -427,3 +427,4 @@ mark.sp-hl{background:none;color:#fde68a}
 /* 窄屏：图例最多两行、不超出画布；横屏矮屏：弹幕开关移到右上（右下被悬浮配乐按钮挡住），并让开红方军旗 */
 @media (max-width:640px){.legend{left:8px;right:8px;transform:none;margin:0 auto;width:max-content;max-width:calc(100% - 16px);box-sizing:border-box;white-space:normal;text-align:center;line-height:1.35}}
 @media (max-height:500px) and (orientation:landscape){.battle-card .dm-tog{bottom:auto;top:52px;right:52px;font-size:10.5px;padding:3px 7px}}
+.sr-only{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
