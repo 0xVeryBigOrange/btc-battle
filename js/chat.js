@@ -1,6 +1,7 @@
 // 匿名喊单评论区 + 弹幕：Supabase REST（读/写）+ Realtime WebSocket（postgres_changes INSERT），不依赖 SDK
+import { ls as store, ss as sessStore } from './store.js?v=a0650868';
 // 只使用公开的 publishable key；表开启 RLS，匿名只能读和发，数据库端限流（同 IP 3 秒 1 条 / 每分钟 10 条）
-import { t as T, onLang, lang as _lang } from './i18n.js?v=e21a7f0a';
+import { t as T, onLang, lang as _lang } from './i18n.js?v=a0650868';
 
 const SB_URL = 'https://gtdvykkdvpzsnhlqlgun.supabase.co';
 const SB_KEY = 'sb_publishable_i5XDXdgwAMTA0PHFCWTeew_qDAv9-pU';
@@ -47,12 +48,12 @@ async function rest(path, opt = {}, ms = 8000) {
 // ---------- 弹幕 ----------
 class Danmaku {
   constructor(host) {
-    this.host = host; this.queue = []; this.live = 0; this.lanes = []; this.on = localStorage.getItem('cw_dm') !== '0';
+    this.host = host; this.queue = []; this.live = 0; this.lanes = []; this.on = store.getItem('cw_dm') !== '0';
     this.layer = document.createElement('div'); this.layer.className = 'danmaku'; this.layer.setAttribute('aria-hidden', 'true');
     host.appendChild(this.layer);
     this.timer = setInterval(() => this.pump(), 180);
   }
-  setOn(v) { this.on = v; localStorage.setItem('cw_dm', v ? '1' : '0'); if (!v) { this.queue.length = 0; this.layer.replaceChildren(); this.live = 0; this.lanes = []; } }
+  setOn(v) { this.on = v; store.setItem('cw_dm', v ? '1' : '0'); if (!v) { this.queue.length = 0; this.layer.replaceChildren(); this.live = 0; this.lanes = []; } }
   geom() {
     const w = this.host.clientWidth, h = this.host.clientHeight;
     const small = w < 640, lh = small ? 26 : 32, top = small ? 46 : 52, bottom = small ? 34 : 40;
@@ -99,21 +100,21 @@ export function initChat({ getCoin, battleHost }) {
   const list = $('chatList'), input = $('chatIn'), nickIn = $('chatNick'), msg = $('chatMsg'), cnt = $('chatCnt'), live = $('chatLive');
   const dm = new Danmaku(battleHost);
   const items = new Map(); // id → comment
-  let mine0 = []; try { mine0 = JSON.parse(sessionStorage.getItem('cw_mine') || '[]'); } catch {}
+  let mine0 = []; try { mine0 = JSON.parse(sessStore.getItem('cw_mine') || '[]'); } catch {}
   const mine = new Set(Array.isArray(mine0) ? mine0.filter(Number.isSafeInteger) : []);
   let lastId = 0, state = 'loading', ws = null, wsRef = 0, hb = null, backoff = 1000, cooldown = 0, msgTimer = null, retryT = null;
 
   // 昵称：本机固定一个随机编号，前缀随语言（中文 韭菜#1234 / 英文 Degen#1234）
-  let nickNum = localStorage.getItem('cw_nick_num');
+  let nickNum = store.getItem('cw_nick_num');
   if (!/^\d{4}$/.test(nickNum || '')) {
-    const old = (localStorage.getItem('cw_nick_def') || '').match(/(\d{4})$/);
+    const old = (store.getItem('cw_nick_def') || '').match(/(\d{4})$/);
     nickNum = old ? old[1] : String(Math.floor(Math.random() * 10000)).padStart(4, '0');
-    localStorage.setItem('cw_nick_num', nickNum); localStorage.removeItem('cw_nick_def');
+    store.setItem('cw_nick_num', nickNum); store.removeItem('cw_nick_def');
   }
   const defNick = () => T('chatNickPre') + '#' + nickNum;
-  nickIn.value = clean(localStorage.getItem('cw_nick') || '', true).slice(0, 16);
+  nickIn.value = clean(store.getItem('cw_nick') || '', true).slice(0, 16);
   nickIn.placeholder = defNick();
-  nickIn.addEventListener('change', () => { nickIn.value = clean(nickIn.value, true).slice(0, 16); localStorage.setItem('cw_nick', nickIn.value); });
+  nickIn.addEventListener('change', () => { nickIn.value = clean(nickIn.value, true).slice(0, 16); store.setItem('cw_nick', nickIn.value); });
 
   function flash(text, bad = true) {
     msg.textContent = text; msg.className = 'chat-msg show' + (bad ? ' bad' : '');
@@ -234,7 +235,7 @@ export function initChat({ getCoin, battleHost }) {
     try {
       const r = await rest('comments?select=' + COLS, { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ coin, side, nick, body }) });
       const c = r && r[0];
-      if (c) { mine.add(c.id); sessionStorage.setItem('cw_mine', JSON.stringify([...mine].slice(-50))); add([c], { fromRest: true }); list.scrollTop = list.scrollHeight; }
+      if (c) { mine.add(c.id); sessStore.setItem('cw_mine', JSON.stringify([...mine].slice(-50))); add([c], { fromRest: true }); list.scrollTop = list.scrollHeight; }
       input.value = ''; updCnt();
     } catch (e) {
       const m = String(e.message || '');

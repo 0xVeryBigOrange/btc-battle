@@ -1,10 +1,11 @@
 // 中英文切换：?lang=zh|en > localStorage > 浏览器语言（zh* → 中文，其它 → 英文）
+import { ls as store } from './store.js?v=a0650868';
 const KEY = 'cw_lang';
 export const escH = (x) => String(x).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 function detect() {
   const q = new URLSearchParams(location.search).get('lang');
   if (q && /^(zh|en)/i.test(q)) return q.toLowerCase().startsWith('zh') ? 'zh' : 'en';
-  const s = localStorage.getItem(KEY); if (s === 'zh' || s === 'en') return s;
+  const s = store.getItem(KEY); if (s === 'zh' || s === 'en') return s;
   const nav = (navigator.languages && navigator.languages[0]) || navigator.language || 'en';
   return /^zh/i.test(nav) ? 'zh' : 'en';
 }
@@ -13,7 +14,7 @@ const subs = [];
 export function onLang(fn) { subs.push(fn); }
 export function setLang(l) {
   if (l !== 'zh' && l !== 'en') return;
-  lang = l; localStorage.setItem(KEY, l);
+  lang = l; store.setItem(KEY, l);
   const u = new URL(location.href); u.searchParams.set('lang', l); history.replaceState(null, '', u);
   applyI18n(); subs.forEach(f => f(l));
 }

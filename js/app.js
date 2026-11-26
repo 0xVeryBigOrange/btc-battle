@@ -1,9 +1,10 @@
-import { FeedManager, SOURCES, fetchMiniTickers, fetchBinance1s, fetchBinanceAggTrades, fetchOkxTrades, fetchCoinbaseTrades } from './feeds.js?v=e21a7f0a';
-import { PRESET, universe, loadUniverse, loadTickers, fetchQuoteVolume, thresholdsFor, search as searchCoins, topByVolume, recents, pushRecent, favorites, toggleFav, primarySource } from './markets.js?v=e21a7f0a';
-import { Battle } from './battle.js?v=e21a7f0a';
-import { t as T, lang, setLang, onLang, applyI18n, fmtUsd, fmtShort, fmtNum, escH } from './i18n.js?v=e21a7f0a';
-import { AudioController } from './music.js?v=e21a7f0a';
-import { initChat } from './chat.js?v=e21a7f0a';
+import { FeedManager, SOURCES, fetchMiniTickers, fetchBinance1s, fetchBinanceAggTrades, fetchOkxTrades, fetchCoinbaseTrades } from './feeds.js?v=a0650868';
+import { ls as store } from './store.js?v=a0650868';
+import { PRESET, universe, loadUniverse, loadTickers, fetchQuoteVolume, thresholdsFor, search as searchCoins, topByVolume, recents, pushRecent, favorites, toggleFav, primarySource } from './markets.js?v=a0650868';
+import { Battle } from './battle.js?v=a0650868';
+import { t as T, lang, setLang, onLang, applyI18n, fmtUsd, fmtShort, fmtNum, escH } from './i18n.js?v=a0650868';
+import { AudioController } from './music.js?v=a0650868';
+import { initChat } from './chat.js?v=a0650868';
 
 const $ = (id) => document.getElementById(id);
 const pad = (n) => String(n).padStart(2, '0');
@@ -11,7 +12,7 @@ const pad = (n) => String(n).padStart(2, '0');
 // ---------- 币种配置 ----------
 // M = 当前市场（交易所代码、价格/数量精度）；CF = 当前币的大单/炮弹门槛（BTC、ETH 固定，其它币按 24h 成交额缩放，见 markets.js）
 const params = new URLSearchParams(location.search);
-const wantCoin = (params.get('coin') || localStorage.getItem('cw_coin') || 'btc').toLowerCase().trim();
+const wantCoin = (params.get('coin') || store.getItem('cw_coin') || 'btc').toLowerCase().trim();
 let coin = 'btc', M = PRESET.btc, CF = { dp: 2, qdp: 3, ...thresholdsFor('btc') };
 const cfg = () => CF;
 const fmtPx = (p, dp) => p.toLocaleString('en-US', { minimumFractionDigits: dp, maximumFractionDigits: dp });
@@ -277,12 +278,12 @@ const fm = new FeedManager({
   onBook(b) { S.book = b; },
 });
 const sel = $('sourceSel');
-sel.value = params.get('source') || localStorage.getItem('bb_source') || 'auto';
+sel.value = params.get('source') || store.getItem('bb_source') || 'auto';
 if (!sel.value) sel.value = 'auto';
 // 断网恢复：若当前不在正常接收，立刻从首选交易所重连（不用等退避计时器，也能从备用源切回 Binance）
 window.addEventListener('offline', statusText);
 window.addEventListener('online', () => { if (!lastStatus || lastStatus[0] !== 'live') fm.start(sel.value, M); });
-sel.onchange = () => { localStorage.setItem('bb_source', sel.value); resetStats(); fm.start(sel.value, M); };
+sel.onchange = () => { store.setItem('bb_source', sel.value); resetStats(); fm.start(sel.value, M); };
 
 // ---------- 币种切换 ----------
 const tabs = [...document.querySelectorAll('#coinTabs button[data-coin]')];
@@ -291,11 +292,11 @@ function moveInd() {
   if (on) { ind.style.left = on.offsetLeft + 'px'; ind.style.width = on.offsetWidth + 'px'; }
 }
 function renderChips() {
-  const saved = +localStorage.getItem('cw_th_' + coin);
+  const saved = +store.getItem('cw_th_' + coin);
   S.threshold = cfg().chips.includes(saved) ? saved : cfg().defChip;
   $('chips').innerHTML = cfg().chips.map(v => `<button data-v="${v}" class="${v === S.threshold ? 'on' : ''}">${wan(v)}</button>`).join('');
   for (const b of document.querySelectorAll('#chips button')) b.onclick = () => {
-    S.threshold = +b.dataset.v; localStorage.setItem('cw_th_' + coin, S.threshold);
+    S.threshold = +b.dataset.v; store.setItem('cw_th_' + coin, S.threshold);
     document.querySelectorAll('#chips button').forEach(x => x.classList.toggle('on', x === b));
     renderTrades();
   };
@@ -327,7 +328,7 @@ async function setCoin(id, { push = true, first = false } = {}) {
   if (!PRESET[id] && !(qv > 0)) { vol = await fetchQuoteVolume(m); if (g !== switchGen) return; qv = vol ? vol.qv : 0; m.qvP = qv; if (!m.qv) m.qv = qv; }
   coin = id; M = m;
   CF = { dp: Math.min(m.dp ?? 2, 10), qdp: id === 'eth' ? 2 : Math.min(m.qdp ?? 3, 3), ...thresholdsFor(id, qv) };
-  localStorage.setItem('cw_coin', id); pushRecent(id);
+  store.setItem('cw_coin', id); pushRecent(id);
   const u = new URL(location.href); u.searchParams.set('coin', id);
   if (push && !first) history.pushState({ coin: id }, '', u); else history.replaceState({ coin: id }, '', u);
   const key = tabKey(id);
@@ -610,7 +611,7 @@ setInterval(refresh, 400);
 const audio = new AudioController();
 window.__audio = audio; // 调试用
 const AKEY = 'cw_audio2'; // v2：默认开启（忽略旧版“默认关闭”时存下的设置）
-let AP0 = {}; try { AP0 = JSON.parse(localStorage.getItem(AKEY) || '{}') || {}; } catch {} // 存储损坏时用默认值，不让整页崩掉
+let AP0 = {}; try { AP0 = JSON.parse(store.getItem(AKEY) || '{}') || {}; } catch {} // 存储损坏时用默认值，不让整页崩掉
 const AP = Object.assign({ music: true, sfx: true, vol: 75 }, AP0);
 const audioBtn = $('audioBtn'), pop = $('audioPop'), mInd = $('musicInd');
 $('musicTog').checked = AP.music; $('sfxTog').checked = AP.sfx; $('volRange').value = AP.vol;
@@ -627,7 +628,7 @@ function updateMusicInd() {
   mInd.textContent = locked ? T('mLocked') : !want ? T('mOff') : AP.music ? `♪ ${audio.bpm()} BPM · ${moodLabel()}` : `${T('mSfx')} · ${moodLabel()}`;
 }
 function saveAudio() {
-  localStorage.setItem(AKEY, JSON.stringify(AP));
+  store.setItem(AKEY, JSON.stringify(AP));
   audio.apply({ music: AP.music, sfx: AP.sfx, volume: AP.vol / 100 });
   if ((AP.music || AP.sfx) && !audio.running) audio.unlock().then(updateMusicInd); // 开关本身就是一次点击
   updateMusicInd();
