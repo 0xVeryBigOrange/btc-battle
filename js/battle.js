@@ -1,6 +1,6 @@
 // 战场动画：Canvas 2D，蓝军（多）在左，红军（空）在右
-import { t as tr, fmtUsd } from './i18n.js?v=a0650868';
-import { makeUnitSprites, drawStandard, Fortress, UNIT } from './units.js?v=a0650868';
+import { t as tr, fmtUsd } from './i18n.js?v=078057b0';
+import { makeUnitSprites, drawStandard, Fortress, UNIT } from './units.js?v=078057b0';
 const TAU = Math.PI * 2;
 const rand = (a, b) => a + Math.random() * (b - a);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));

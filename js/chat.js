@@ -1,7 +1,7 @@
 // 匿名喊单评论区 + 弹幕：Supabase REST（读/写）+ Realtime WebSocket（postgres_changes INSERT），不依赖 SDK
-import { ls as store, ss as sessStore } from './store.js?v=a0650868';
+import { ls as store, ss as sessStore } from './store.js?v=078057b0';
 // 只使用公开的 publishable key；表开启 RLS，匿名只能读和发，数据库端限流（同 IP 3 秒 1 条 / 每分钟 10 条）
-import { t as T, onLang, lang as _lang } from './i18n.js?v=a0650868';
+import { t as T, onLang, lang as _lang } from './i18n.js?v=078057b0';
 
 const SB_URL = 'https://gtdvykkdvpzsnhlqlgun.supabase.co';
 const SB_KEY = 'sb_publishable_i5XDXdgwAMTA0PHFCWTeew_qDAv9-pU';
@@ -48,7 +48,7 @@ async function rest(path, opt = {}, ms = 8000) {
 // ---------- 弹幕 ----------
 class Danmaku {
   constructor(host) {
-    this.host = host; this.queue = []; this.live = 0; this.lanes = []; this.on = store.getItem('cw_dm') !== '0';
+    this.host = host; this.queue = []; this.live = 0; this.lanes = []; const pref = store.getItem('cw_dm'); this.on = pref === '1' || (pref !== '0' && !(typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches)); // 系统开启“减少动态效果”时默认关弹幕，可手动打开
     this.layer = document.createElement('div'); this.layer.className = 'danmaku'; this.layer.setAttribute('aria-hidden', 'true');
     host.appendChild(this.layer);
     this.timer = setInterval(() => this.pump(), 180);
@@ -166,7 +166,7 @@ export function initChat({ getCoin, battleHost }) {
     if (added) { renderPlaceholder(); if (stick) list.scrollTop = list.scrollHeight; }
   }
   const tagFor = (c) => (c.coin && c.coin.toUpperCase() !== (getCoin() || '').toUpperCase()) ? c.coin : '';
-  function rerender() { nickIn.placeholder = defNick(); list.replaceChildren(); for (const c of items.values()) list.appendChild(row(c)); renderPlaceholder(); list.scrollTop = list.scrollHeight; setState(state); syncDmBtns(); }
+  function rerender() { nickIn.placeholder = defNick(); list.setAttribute('aria-busy', 'true'); list.replaceChildren(); for (const c of items.values()) list.appendChild(row(c)); renderPlaceholder(); list.scrollTop = list.scrollHeight; requestAnimationFrame(() => list.setAttribute('aria-busy', 'false')); setState(state); syncDmBtns(); }
 
   // 首次加载 + 断线补齐
   async function load() {
@@ -175,7 +175,9 @@ export function initChat({ getCoin, battleHost }) {
       const q = since ? `comments?select=${COLS}&id=gt.${since}&order=id.asc&limit=${MAX_LIST}` : `comments?select=${COLS}&order=id.desc&limit=${MAX_LIST}`;
       let rows = await rest(q); if (!Array.isArray(rows)) rows = []; if (!since) rows.reverse();
       const first = !items.size && !since;
+      if (first) list.setAttribute('aria-busy', 'true'); // 首屏一次性载入的历史留言不让读屏逐条播报
       add(rows, { danmaku: !first, fromRest: true });
+      if (first) requestAnimationFrame(() => list.setAttribute('aria-busy', 'false'));
       if (first) { // 开场把最近 20 条错开飘一遍
         rows.slice(-REPLAY).forEach((c, i) => setTimeout(() => dm.push(c, { mine: mine.has(c.id), tag: tagFor(c) }), 2500 + i * 700));
       }
