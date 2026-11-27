@@ -1,10 +1,10 @@
-import { FeedManager, SOURCES, fetchMiniTickers, fetchBinance1s, fetchBinanceAggTrades, fetchOkxTrades, fetchCoinbaseTrades } from './feeds.js?v=078057b0';
-import { ls as store } from './store.js?v=078057b0';
-import { PRESET, universe, loadUniverse, loadTickers, fetchQuoteVolume, thresholdsFor, search as searchCoins, topByVolume, recents, pushRecent, favorites, toggleFav, primarySource } from './markets.js?v=078057b0';
-import { Battle } from './battle.js?v=078057b0';
-import { t as T, lang, setLang, onLang, applyI18n, fmtUsd, fmtShort, fmtNum, escH } from './i18n.js?v=078057b0';
-import { AudioController } from './music.js?v=078057b0';
-import { initChat } from './chat.js?v=078057b0';
+import { FeedManager, SOURCES, fetchMiniTickers, fetchBinance1s, fetchBinanceAggTrades, fetchOkxTrades, fetchCoinbaseTrades } from './feeds.js?v=59978e14';
+import { ls as store } from './store.js?v=59978e14';
+import { PRESET, universe, loadUniverse, loadTickers, fetchQuoteVolume, thresholdsFor, search as searchCoins, topByVolume, recents, pushRecent, favorites, toggleFav, primarySource } from './markets.js?v=59978e14';
+import { Battle } from './battle.js?v=59978e14';
+import { t as T, lang, setLang, onLang, applyI18n, fmtUsd, fmtShort, fmtNum, escH } from './i18n.js?v=59978e14';
+import { AudioController } from './music.js?v=59978e14';
+import { initChat } from './chat.js?v=59978e14';
 
 const $ = (id) => document.getElementById(id);
 const pad = (n) => String(n).padStart(2, '0');
@@ -125,7 +125,7 @@ function onTrade(t, src) {
   if (t.side === 'buy') { bk.b += t.qty; bk.bu += usd; } else { bk.s += t.qty; bk.su += usd; }
   bk.n++;
   if (S.last && t.price !== S.last) { S.tickDir = t.price > S.last ? 1 : -1; audio.tick(S.tickDir); } // 价格每跳一下 → 旋律走一步
-  S.last = t.price;
+  S.last = t.price; updateTitle();
   const ph = S.px[sec % 120]; ph.sec = sec; ph.p = t.price; // 每秒最后成交价
   // 一笔主动单吃掉多个价位时，交易所会拆成多条同一毫秒、同方向的成交 → 合并成一笔（价格取成交均价）
   if (pend && pend.side === t.side && pend.ts === t.ts) { pend.qty += t.qty; pend.usd += usd; pend.price = pend.usd / pend.qty; }
@@ -274,7 +274,7 @@ const fm = new FeedManager({
     $('pair').textContent = `${M.base}/${SOURCES[src].quote} · ${SOURCES[src].name}`;
   },
   onTrade,
-  onTicker(t) { S.open24h = t.open24h; S.hi = t.high24h; S.lo = t.low24h; S.vol = t.vol24h; if (!S.last) S.last = t.last; },
+  onTicker(t) { S.open24h = t.open24h; S.hi = t.high24h; S.lo = t.low24h; S.vol = t.vol24h; if (!S.last) S.last = t.last; updateTitle(); },
   onBook(b) { S.book = b; },
 });
 const sel = $('sourceSel');
@@ -341,7 +341,7 @@ async function setCoin(id, { push = true, first = false } = {}) {
   renderChips(); resetStats(); S.src = null;
   if (m.last > 0) S.last = m.last; // 冷门币可能几十秒没有成交 / 行情推送：先用搜索列表里的最新价（≤60 秒前），有成交后立即替换
   $('pair').textContent = `${m.base}/${SOURCES[primarySource(m)].quote}`;
-  document.title = T('title', m.base);
+  titlePx = 0; titleArrow = ''; updateTitle(true); // 换币立即更新标题（还没有价格时用普通标题）
   requestAnimationFrame(fitHeader);
   fm.start(sel.value, m);
 }
@@ -368,6 +368,20 @@ async function pollMini() {
 }
 pollMini(); setInterval(pollMini, 4000);
 
+// ---------- 标签页标题：实时价格（切到别的标签页也能看行情）----------
+// 由行情消息驱动、每秒最多改一次：后台标签页的定时器会被浏览器限流到每分钟一次，但 WebSocket 消息不会
+let titleT = 0, titlePx = 0, titleArrow = '', titleTimer = 0;
+function updateTitle(force) {
+  const now = Date.now();
+  if (!force && now - titleT < 1000) { if (!titleTimer) titleTimer = setTimeout(updateTitle, 1000 - (now - titleT), true); return; }
+  titleT = now; clearTimeout(titleTimer); titleTimer = 0;
+  if (!(S.last > 0) || !M) { document.title = T('title', M && M.base); return; }
+  if (titlePx && S.last !== titlePx) titleArrow = S.last > titlePx ? ' ▲' : ' ▼';
+  titlePx = S.last;
+  const t = T('titleLive', M.base, '$' + fmtP(S.last) + titleArrow);
+  if (document.title !== t) document.title = t;
+}
+
 // ---------- 价格（逐位滚动） ----------
 const priceEl = $('price'); let flashT, lastShown = 0;
 function renderPrice(str, prevStr) {
@@ -379,14 +393,13 @@ function renderPrice(str, prevStr) {
   priceEl.innerHTML = html;
 }
 setInterval(() => {
-  if (!S.last || S.last === lastShown) return;
+  if (document.hidden || !S.last || S.last === lastShown) return; // 后台不重绘价格数字（标题另由 updateTitle 更新）
   const up = S.last > lastShown, str = '$' + fmtP(S.last);
   if (lastShown) {
     priceEl.classList.remove('up', 'down'); void priceEl.offsetWidth; priceEl.classList.add(up ? 'up' : 'down');
     clearTimeout(flashT); flashT = setTimeout(() => priceEl.classList.remove('up', 'down'), 650);
   }
   renderPrice(str, S.shownStr); S.shownStr = str; lastShown = S.last;
-  document.title = T('title', `${str} ${M.base}`);
   const ch = S.open24h ? (S.last / S.open24h - 1) * 100 : null;
   setMini(coin, S.last, ch);
   updateMeta();
@@ -760,7 +773,7 @@ document.querySelectorAll('[data-lang]').forEach(b => b.onclick = (e) => { e.sto
 onLang(() => {
   renderChips(); renderTrades(); statusText(); updateMusicInd(); refresh(); if (!sPop.hidden) renderSearch();
   if (intro.isConnected) introMsg.textContent = T(...introKey);
-  document.title = T('title', S.last ? `$${fmtP(S.last)} ${M.base}` : M.base);
+  updateTitle(true);
   requestAnimationFrame(fitHeader);
 });
 document.title = T('title');

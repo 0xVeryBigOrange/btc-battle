@@ -1,5 +1,5 @@
 // 中英文切换：?lang=zh|en > localStorage > 浏览器语言（zh* → 中文，其它 → 英文）
-import { ls as store } from './store.js?v=078057b0';
+import { ls as store } from './store.js?v=59978e14';
 const KEY = 'cw_lang';
 export const escH = (x) => String(x).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 function detect() {
@@ -45,6 +45,7 @@ export function fmtShort(v) {
 const D = {
   zh: {
     title: (p) => `${p ? p + ' · ' : ''}Crypto War · 多空战场 | 加密货币实时多空对决`,
+    titleLive: (b, p) => `${b} ${p} · Crypto War 多空战场`,
     metaDesc: 'Crypto War · 多空战场：BTC、ETH、SOL、DOGE 等 650+ 币种实时价格、挂单与吃单对决，蓝军（多）vs 红军（空）动画战场。by 大橙子 @0xVeryBigOrange',
     battleAria: '实时多空战场动画：蓝军代表买方（多），红军代表卖方（空）',
     flowAria: '近 2 分钟主动买卖量柱状图（每 2 秒一根，向上蓝柱为买、向下红柱为卖，折线为累计净买入）', depthAria: '盘口累计深度图：左侧蓝色为买单，右侧红色为卖单',
@@ -99,6 +100,7 @@ const D = {
   },
   en: {
     title: (p) => `${p ? p + ' · ' : ''}Crypto War · Bulls vs Bears | Live crypto battle`,
+    titleLive: (b, p) => `${b} ${p} · Crypto War`,
     metaDesc: 'Crypto War: live price, order book and taker flow for BTC, ETH, SOL, DOGE and 650+ coins as an animated battle — Blue Army (bulls) vs Red Army (bears). by 大橙子 (Big Orange) @0xVeryBigOrange',
     battleAria: 'Live battle animation: the blue army is buyers (bulls), the red army is sellers (bears)',
     flowAria: 'Taker buy/sell volume over the last 2 minutes (one bar per 2 seconds: blue up = buys, red down = sells, line = cumulative net buying)', depthAria: 'Cumulative order book depth: bids in blue on the left, asks in red on the right',
