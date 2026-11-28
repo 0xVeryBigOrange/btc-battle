@@ -1,10 +1,10 @@
-import { FeedManager, SOURCES, fetchMiniTickers, fetchBinance1s, fetchBinanceAggTrades, fetchOkxTrades, fetchCoinbaseTrades } from './feeds.js?v=624bf9c6';
-import { ls as store } from './store.js?v=624bf9c6';
-import { PRESET, universe, loadUniverse, loadTickers, fetchQuoteVolume, thresholdsFor, search as searchCoins, topByVolume, recents, pushRecent, favorites, toggleFav, primarySource } from './markets.js?v=624bf9c6';
-import { Battle } from './battle.js?v=624bf9c6';
-import { t as T, lang, setLang, onLang, applyI18n, fmtUsd, fmtShort, fmtNum, escH } from './i18n.js?v=624bf9c6';
-import { AudioController } from './music.js?v=624bf9c6';
-import { initChat } from './chat.js?v=624bf9c6';
+import { FeedManager, SOURCES, fetchMiniTickers, fetchBinance1s, fetchBinanceAggTrades, fetchOkxTrades, fetchCoinbaseTrades } from './feeds.js?v=3e7b64dd';
+import { ls as store } from './store.js?v=3e7b64dd';
+import { PRESET, universe, loadUniverse, loadTickers, fetchQuoteVolume, thresholdsFor, search as searchCoins, topByVolume, recents, pushRecent, favorites, toggleFav, primarySource } from './markets.js?v=3e7b64dd';
+import { Battle } from './battle.js?v=3e7b64dd';
+import { t as T, lang, setLang, onLang, applyI18n, fmtUsd, fmtShort, fmtNum, escH } from './i18n.js?v=3e7b64dd';
+import { AudioController } from './music.js?v=3e7b64dd';
+import { initChat } from './chat.js?v=3e7b64dd';
 
 const $ = (id) => document.getElementById(id);
 const pad = (n) => String(n).padStart(2, '0');
@@ -36,8 +36,9 @@ function finishIntro() {
   introDone = true;
   setTimeout(() => {
     // 浏览器已允许播放 / 用户关了声音 → 直接进入；否则显示“点击进入战场”按钮（点击即解锁音频）
-    if (!audio.locked) return closeIntro();
-    intro.classList.add('ready'); introKey = ['introClick']; introMsg.textContent = T('introClick');
+    if (!audio.locked) return closeIntro(); // 配乐已在响（或用户关了声音）→ 不提示、直接进入
+    intro.classList.add('ready', 'want-sound'); // 浏览器拦住了自动播放：提示点一下即可开配乐
+    introKey = ['introClick']; introMsg.textContent = T('introClick');
   }, wait + 350);
 }
 function closeIntro() {
@@ -660,7 +661,7 @@ if (AP.music || AP.sfx) audio.tryAutoStart().then(updateMusicInd);
 // 开场“点击进入战场”
 $('introGo').onclick = (e) => { e.stopPropagation(); onGesture(); closeIntro(); };
 intro.addEventListener('click', () => { if (intro.classList.contains('ready')) { onGesture(); closeIntro(); } });
-document.addEventListener('keydown', (e) => { if (intro.classList.contains('ready') && (e.key === 'Enter' || e.key === ' ')) closeIntro(); });
+document.addEventListener('keydown', (e) => { if (intro.classList.contains('ready') && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onGesture(); closeIntro(); } });
 mInd.onclick = (e) => { e.stopPropagation(); if (audio.locked) onGesture(); else pop.hidden = !pop.hidden; };
 audioBtn.onclick = (e) => { e.stopPropagation(); pop.hidden = !pop.hidden; };
 document.addEventListener('click', (e) => { if (!pop.hidden && !e.target.closest('.audio-wrap')) pop.hidden = true; });

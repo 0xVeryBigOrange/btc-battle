@@ -1,14 +1,13 @@
 // 匿名喊单评论区 + 弹幕：Supabase REST（读/写）+ Realtime WebSocket（postgres_changes INSERT），不依赖 SDK
-import { ls as store, ss as sessStore } from './store.js?v=624bf9c6';
+import { ls as store, ss as sessStore } from './store.js?v=3e7b64dd';
 // 只使用公开的 publishable key；表开启 RLS，匿名只能读和发，数据库端限流（同 IP 3 秒 1 条 / 每分钟 10 条）
-import { t as T, onLang, lang as _lang } from './i18n.js?v=624bf9c6';
+import { t as T, onLang, lang as _lang } from './i18n.js?v=3e7b64dd';
 
 const SB_URL = 'https://gtdvykkdvpzsnhlqlgun.supabase.co';
 const SB_KEY = 'sb_publishable_i5XDXdgwAMTA0PHFCWTeew_qDAv9-pU';
 const COLS = 'id,created_at,coin,side,nick,body';
 const MAX_LIST = 100, REPLAY = 20, MAX_LEN = 140;
 const $ = (id) => document.getElementById(id);
-const pad = (n) => String(n).padStart(2, '0');
 const SIDES = new Set(['bull', 'bear', 'neutral']);
 const COIN_RE = /^[A-Za-z0-9\u4e00-\u9fff]{1,20}$/;
 // 与数据库端 private.clean_text 一致：去掉控制字符、零宽空格、双向覆盖/嵌入/隔离字符，限制叠加符号与换行
@@ -133,15 +132,24 @@ export function initChat({ getCoin, battleHost }) {
   const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const fmtTime = (iso) => {
     const d = new Date(iso); if (isNaN(d)) return '';
-    const hm = `${pad(d.getHours())}:${pad(d.getMinutes())}`, n = new Date();
-    if (d.toDateString() === n.toDateString()) return hm;
-    return (_lang === 'en' ? `${MON[d.getMonth()]} ${d.getDate()} ` : `${d.getMonth() + 1}/${d.getDate()} `) + hm;
+    const n = new Date(), sec = Math.max(0, (n - d) / 1000);
+    if (sec < 60) return T('justNow');
+    if (sec < 3600) return T('minAgo', Math.floor(sec / 60));
+    const sameDay = d.toDateString() === n.toDateString();
+    const yest = new Date(n.getFullYear(), n.getMonth(), n.getDate() - 1).toDateString() === d.toDateString();
+    if (sameDay) return T('hourAgo', Math.floor(sec / 3600));
+    if (yest) return T('yesterday');
+    const year = d.getFullYear() !== n.getFullYear();
+    return _lang === 'en' ? `${MON[d.getMonth()]} ${d.getDate()}${year ? ', ' + d.getFullYear() : ''}` : `${year ? d.getFullYear() + '/' : ''}${d.getMonth() + 1}/${d.getDate()}`;
   };
-  // 悬停/长按显示完整日期时间（含年份与时区，按当前语言）
+  // 悬停/长按仍显示完整日期时间（含年份与时区，按当前语言）
   const fullTime = (iso) => { const d = new Date(iso); if (isNaN(d)) return ''; try { return d.toLocaleString(_lang === 'en' ? 'en-US' : 'zh-CN', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, timeZoneName: 'short' }); } catch { return d.toString(); } };
-  // 跨过午夜后，“今天 HH:MM”的旧留言补上日期（每分钟检查一次日期是否变化）
-  let today = new Date().toDateString();
-  setInterval(() => { const n = new Date().toDateString(); if (n === today) return; today = n; list.querySelectorAll('time.cm-time').forEach(el => { el.textContent = fmtTime(el.dateTime); }); }, 60000);
+  function refreshTimes() {
+    if (document.hidden) return;
+    list.querySelectorAll('time.cm-time').forEach(el => { const t = fmtTime(el.dateTime); if (el.textContent !== t) el.textContent = t; });
+  }
+  setInterval(refreshTimes, 30000); // 相对时间自行刷新；切到后台时暂停
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshTimes(); });
   function row(c) {
     const li = document.createElement('li'); li.className = 'cm ' + c.side + (mine.has(c.id) ? ' mine' : ''); li.dataset.id = c.id;
     const top = document.createElement('div'); top.className = 'cm-top';

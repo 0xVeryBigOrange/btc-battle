@@ -1,5 +1,5 @@
 // 中英文切换：?lang=zh|en > localStorage > 浏览器语言（zh* → 中文，其它 → 英文）
-import { ls as store } from './store.js?v=624bf9c6';
+import { ls as store } from './store.js?v=3e7b64dd';
 const KEY = 'cw_lang';
 export const escH = (x) => String(x).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 function detect() {
@@ -53,6 +53,7 @@ const D = {
     introSub: '多 空 战 场', introGo: '⚔️ 点击进入战场 🔊', introHint: '实时行情驱动 · 战鼓随多空节奏变化',
     introGather: '集结部队中…', introConn: (l) => `连接战场情报 · ${l}…`, introScout: '侦察敌情中…', introReady: '部队就位',
     introStart: '⚔️ 战斗开始！', introClick: '战鼓已备好 · 点击开战',
+    introMusic: '点一下即可开启配乐',
     home: 'Crypto War 首页', wmCn: '多空战场', byTitle: '关注作者 大橙子 @0xVeryBigOrange', byName: '大橙子',
     connecting: '连接中…', source: '数据源', auto: '自动', music: '♪ 配乐',
     audioTitle: '战争配乐 / 音效', audioAria: '战争配乐与音效', apTitle: '⚔️ 战争配乐 <small>随实时战况变化</small>',
@@ -96,6 +97,7 @@ const D = {
     chatLoading: '正在连接喊单频道…', chatEmpty: '还没有人喊单，来抢沙发！', chatDown: '评论暂不可用，稍后自动重试（不影响战场）',
     chatRate: '喊太快了，歇 3 秒再来', chatRateG: '战场太热闹了，稍等几秒再喊', chatErr: '发送失败，请重试', chatEmptyBody: '先写点内容',
     dmOn: '弹幕 开', dmOff: '弹幕 关', dmT: '弹幕开关', chatLive: '实时', chatOff: '重连中', chatMe: '我', chatSideBull: '多', chatSideBear: '空', chatNickPre: '韭菜',
+    justNow: '刚刚', minAgo: (n) => `${n} 分钟前`, hourAgo: (n) => `${n} 小时前`, yesterday: '昨天',
     chatNote: '匿名发言，内容为网友观点，不代表本站，不构成投资建议',
   },
   en: {
@@ -108,6 +110,7 @@ const D = {
     introSub: 'BULLS · VS · BEARS', introGo: '⚔️ Enter the battlefield 🔊', introHint: 'Driven by live market data · the drums follow the bulls and bears',
     introGather: 'Mustering the troops…', introConn: (l) => `Connecting to ${l}…`, introScout: 'Scouting the enemy…', introReady: 'Troops in position',
     introStart: '⚔️ Battle begins!', introClick: 'War drums ready · click to fight',
+    introMusic: 'One tap turns the music on',
     home: 'Crypto War home', wmCn: 'Bulls vs Bears', byTitle: 'Follow the creator 大橙子 (Big Orange) @0xVeryBigOrange', byName: '大橙子 · Big Orange',
     connecting: 'Connecting…', source: 'Data source', auto: 'Auto', music: '♪ Music',
     audioTitle: 'War music / SFX', audioAria: 'War music and sound effects', apTitle: '⚔️ War music <small>follows the live battle</small>',
@@ -151,6 +154,7 @@ const D = {
     chatLoading: 'Connecting to the chat…', chatEmpty: 'No calls yet — be the first!', chatDown: 'Comments unavailable right now, retrying (the battle is unaffected)',
     chatRate: 'Too fast — wait 3 seconds', chatRateG: 'The battlefield is busy, try again in a few seconds', chatErr: 'Send failed, please retry', chatEmptyBody: 'Write something first',
     dmOn: 'Danmaku on', dmOff: 'Danmaku off', dmT: 'Toggle flying comments', chatLive: 'Live', chatOff: 'Reconnecting', chatMe: 'me', chatSideBull: 'Long', chatSideBear: 'Short', chatNickPre: 'Degen',
+    justNow: 'just now', minAgo: (n) => `${n}m ago`, hourAgo: (n) => `${n}h ago`, yesterday: 'yesterday',
     chatNote: 'Anonymous posts are visitors\' opinions, not financial advice',
   },
 };
