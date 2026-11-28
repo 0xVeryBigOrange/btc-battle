@@ -1,7 +1,7 @@
 // 匿名喊单评论区 + 弹幕：Supabase REST（读/写）+ Realtime WebSocket（postgres_changes INSERT），不依赖 SDK
-import { ls as store, ss as sessStore } from './store.js?v=59978e14';
+import { ls as store, ss as sessStore } from './store.js?v=624bf9c6';
 // 只使用公开的 publishable key；表开启 RLS，匿名只能读和发，数据库端限流（同 IP 3 秒 1 条 / 每分钟 10 条）
-import { t as T, onLang, lang as _lang } from './i18n.js?v=59978e14';
+import { t as T, onLang, lang as _lang } from './i18n.js?v=624bf9c6';
 
 const SB_URL = 'https://gtdvykkdvpzsnhlqlgun.supabase.co';
 const SB_KEY = 'sb_publishable_i5XDXdgwAMTA0PHFCWTeew_qDAv9-pU';
@@ -137,6 +137,11 @@ export function initChat({ getCoin, battleHost }) {
     if (d.toDateString() === n.toDateString()) return hm;
     return (_lang === 'en' ? `${MON[d.getMonth()]} ${d.getDate()} ` : `${d.getMonth() + 1}/${d.getDate()} `) + hm;
   };
+  // 悬停/长按显示完整日期时间（含年份与时区，按当前语言）
+  const fullTime = (iso) => { const d = new Date(iso); if (isNaN(d)) return ''; try { return d.toLocaleString(_lang === 'en' ? 'en-US' : 'zh-CN', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, timeZoneName: 'short' }); } catch { return d.toString(); } };
+  // 跨过午夜后，“今天 HH:MM”的旧留言补上日期（每分钟检查一次日期是否变化）
+  let today = new Date().toDateString();
+  setInterval(() => { const n = new Date().toDateString(); if (n === today) return; today = n; list.querySelectorAll('time.cm-time').forEach(el => { el.textContent = fmtTime(el.dateTime); }); }, 60000);
   function row(c) {
     const li = document.createElement('li'); li.className = 'cm ' + c.side + (mine.has(c.id) ? ' mine' : ''); li.dataset.id = c.id;
     const top = document.createElement('div'); top.className = 'cm-top';
@@ -146,7 +151,7 @@ export function initChat({ getCoin, battleHost }) {
     const coin = document.createElement('span'); coin.className = 'cm-coin'; coin.textContent = c.coin;
     top.append(nick, coin);
     if (c.side !== 'neutral') { const sd = document.createElement('span'); sd.className = 'cm-side ' + c.side; sd.textContent = T(c.side === 'bull' ? 'chatSideBull' : 'chatSideBear'); top.append(sd); }
-    const tm = document.createElement('span'); tm.className = 'cm-time'; tm.textContent = fmtTime(c.created_at); top.append(tm);
+    const tm = document.createElement('time'); tm.className = 'cm-time'; tm.dateTime = c.created_at; tm.textContent = fmtTime(c.created_at); tm.title = fullTime(c.created_at); top.append(tm);
     const body = document.createElement('div'); body.className = 'cm-body'; body.dir = 'auto'; body.textContent = c.body; // 纯文本：不解析 HTML，链接不可点
     li.append(top, body); return li;
   }

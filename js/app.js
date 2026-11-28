@@ -1,10 +1,10 @@
-import { FeedManager, SOURCES, fetchMiniTickers, fetchBinance1s, fetchBinanceAggTrades, fetchOkxTrades, fetchCoinbaseTrades } from './feeds.js?v=59978e14';
-import { ls as store } from './store.js?v=59978e14';
-import { PRESET, universe, loadUniverse, loadTickers, fetchQuoteVolume, thresholdsFor, search as searchCoins, topByVolume, recents, pushRecent, favorites, toggleFav, primarySource } from './markets.js?v=59978e14';
-import { Battle } from './battle.js?v=59978e14';
-import { t as T, lang, setLang, onLang, applyI18n, fmtUsd, fmtShort, fmtNum, escH } from './i18n.js?v=59978e14';
-import { AudioController } from './music.js?v=59978e14';
-import { initChat } from './chat.js?v=59978e14';
+import { FeedManager, SOURCES, fetchMiniTickers, fetchBinance1s, fetchBinanceAggTrades, fetchOkxTrades, fetchCoinbaseTrades } from './feeds.js?v=624bf9c6';
+import { ls as store } from './store.js?v=624bf9c6';
+import { PRESET, universe, loadUniverse, loadTickers, fetchQuoteVolume, thresholdsFor, search as searchCoins, topByVolume, recents, pushRecent, favorites, toggleFav, primarySource } from './markets.js?v=624bf9c6';
+import { Battle } from './battle.js?v=624bf9c6';
+import { t as T, lang, setLang, onLang, applyI18n, fmtUsd, fmtShort, fmtNum, escH } from './i18n.js?v=624bf9c6';
+import { AudioController } from './music.js?v=624bf9c6';
+import { initChat } from './chat.js?v=624bf9c6';
 
 const $ = (id) => document.getElementById(id);
 const pad = (n) => String(n).padStart(2, '0');
